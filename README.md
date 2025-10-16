@@ -7,11 +7,11 @@ A comfyui custom node package used by myself.
   git clone https://github.com/A1rCHAN/ComfyUI_A1rSpace.git
   ```
 * Install dependencies in your Python environment.
-  * For Windows Portable, run the following command inside ComfyUI\custom_nodes\ComfyUI_A1rSpace:
+  * For Windows Portable, run the following command inside `ComfyUI\custom_nodes\ComfyUI_A1rSpace`:
     ```
     ..\..\..\python_embeded\python.exe -m pip install -r requirements.txt
     ```
-  * If your ComfyUI venv inside ComfyUI\.venv\Scripts\python.exe:
+  * If your ComfyUI venv inside `ComfyUI\.venv\Scripts\python.exe`:
     ```
     ..\..\.venv\Scripts\python.exe -m pip install -r requirements.txt
     ```
