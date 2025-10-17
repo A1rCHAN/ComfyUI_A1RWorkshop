@@ -19,3 +19,9 @@ A comfyui custom node package used by myself.
     ```
     pip install -r requirements.txt
     ```
+## Nodes preview:
+
+## Plan TODO:
+1. Improve front interaction.
+2. Add and modify more nodes to provide complete functions.
+3. Language support with Chinese.
