@@ -213,21 +213,6 @@ app.registerExtension({
             }; 
         }
 
-        /* If a node adds new output during runtime, maintain the current folding strategy
-        if (!nodeType.prototype._a1r_orig_addOutput && typeof nodeType.prototype.addOutput === 'function') {
-            const origAddOutput = nodeType.prototype.addOutput;
-            nodeType.prototype._a1r_orig_addOutput = origAddOutput;
-            nodeType.prototype.addOutput = function(name, type, extra_info) {
-                const res = origAddOutput.call(this, name, type, extra_info);
-                try {
-                    updateOutputsVisibility(this);
-                    this.setDirtyCanvas(true, true);
-                } catch {}
-                return res;
-            };
-        }
-        */
-
         // Right-click menu adds "Collapse outputs" switch (prototype level, correct signature: canvas, options)
         if (!nodeType.prototype._a1r_orig_getExtraMenuOptions) {
             const origGetExtraMenuOptions = nodeType.prototype.getExtraMenuOptions;
