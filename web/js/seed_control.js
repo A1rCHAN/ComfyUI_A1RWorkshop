@@ -1,7 +1,7 @@
 import { app } from "../../../scripts/app.js";
 
-// Seed 控制（精简）：仅保留 “Manual Random” 按钮
-// - 点击后：生成 64 位随机种子，写回 seed，强制将“生成后控制”切为 fixed，并可选触发一次运行
+// Seed 控制（精简）：仅保留 "Manual Random" 按钮
+// - 点击后：生成 64 位随机种子，写回 seed，强制将"生成后控制"切为 fixed，并可选触发一次运行
 app.registerExtension({
     name: "A1rSpace.Seed_Control",
     async beforeRegisterNodeDef(nodeType, nodeData, app) {
@@ -27,52 +27,56 @@ app.registerExtension({
             return (BigInt(hi) << 32n | BigInt(lo)).toString();
         }
 
-        // 将 “生成后控制” 切为 fixed（优先把枚举控件的值设为字符串 'fixed'，避免显示索引 0）
+        // 将 "生成后控制" 切为 fixed
+        // control_after_generate 是前端自动添加到 seed widget 的控制选项
+        // 需要通过 widgets_values 序列化机制来持久化
         function setControlAfterGenerateFixed(node) {
             try {
                 const ws = Array.isArray(node.widgets) ? node.widgets : [];
-                const ctrl = ws.find(w => {
-                    if (!w?.options) return false;
-                    const nm = (w.name || '').toLowerCase();
-                    if (nm.includes('control') && nm.includes('generate')) return true;
-                    if ([
-                        'control_after_generate',
-                        'after_generate',
-                        'seed_behavior',
-                        'seed_behaviour',
-                    ].includes(nm)) return true;
-                    const vals = w.options.values;
-                    return Array.isArray(vals) && vals.map(x => String(x).toLowerCase()).includes('fixed');
+                
+                // 查找 control_after_generate widget
+                const ctrlWidget = ws.find(w => {
+                    const nm = (w?.name || '').toLowerCase();
+                    return nm.includes('control') && nm.includes('generate');
                 });
-                if (ctrl) {
-                    const vals = (ctrl.options?.values || []).map(x => String(x));
-                    const idx = vals.findIndex(v => v.toLowerCase() === 'fixed');
-                    const target = idx >= 0 ? vals[idx] : 'fixed';
-                    ctrl.value = target; // 设为字符串，避免 0
-                    try { ctrl.callback?.call(node, target, ctrl, node); } catch {}
+                
+                if (ctrlWidget) {
+                    // 设置值为 'fixed'
+                    ctrlWidget.value = 'fixed';
+                    
+                    // 更新 widgets_values 以持久化（ComfyUI 的序列化机制）
+                    if (!Array.isArray(node.widgets_values)) {
+                        node.widgets_values = [];
+                    }
+                    
+                    // 确保 widgets_values 长度足够
+                    while (node.widgets_values.length < ws.length) {
+                        node.widgets_values.push(null);
+                    }
+                    
+                    // 写入 fixed 值到对应位置
+                    const ctrlIdx = ws.indexOf(ctrlWidget);
+                    if (ctrlIdx >= 0) {
+                        node.widgets_values[ctrlIdx] = 'fixed';
+                    }
+                    
+                    // 标记已设置，用于恢复时判断
+                    node.properties = node.properties || {};
+                    node.properties.__a1r_seed_control_fixed = true;
+                    
+                    // 触发回调
+                    try { 
+                        ctrlWidget.callback?.call(node, 'fixed', ctrlWidget, node); 
+                    } catch {}
+                    
                     return true;
                 }
-
-                // 后备：seed 控件上的已知属性
-                const seedWidget = ws.find(w => w?.name === 'seed');
-                if (seedWidget) {
-                    if (seedWidget.options) {
-                        if (typeof seedWidget.options.control_after_generate !== 'undefined') {
-                            seedWidget.options.control_after_generate = 'fixed';
-                            return true;
-                        }
-                        if (typeof seedWidget.options.after_generate !== 'undefined') {
-                            seedWidget.options.after_generate = 'fixed';
-                            return true;
-                        }
-                    }
-                    if (typeof seedWidget.after_generate !== 'undefined') {
-                        seedWidget.after_generate = 'fixed';
-                        return true;
-                    }
-                }
-            } catch {}
-            return false;
+                
+                return false;
+            } catch (e) {
+                console.warn('[Seed_Control] setControlAfterGenerateFixed error:', e);
+                return false;
+            }
         }
 
         // 生命周期：创建/载入/加入图时注入按钮
@@ -87,9 +91,38 @@ app.registerExtension({
         };
 
         const origOnConfigure = nodeType.prototype.onConfigure;
-        nodeType.prototype.onConfigure = function() {
+        nodeType.prototype.onConfigure = function(info) {
             const r = origOnConfigure?.apply(this, arguments);
-            try { this.onNodeCreated?.(); } catch {}
+            try { 
+                this.onNodeCreated?.(); 
+                
+                // 关键修复：从序列化数据恢复 control_after_generate 状态
+                if (this.properties?.__a1r_seed_control_fixed) {
+                    // 延迟执行，确保所有 widgets 已初始化
+                    setTimeout(() => {
+                        try {
+                            const ws = Array.isArray(this.widgets) ? this.widgets : [];
+                            const ctrlWidget = ws.find(w => {
+                                const nm = (w?.name || '').toLowerCase();
+                                return nm.includes('control') && nm.includes('generate');
+                            });
+                            
+                            if (ctrlWidget && Array.isArray(this.widgets_values)) {
+                                const ctrlIdx = ws.indexOf(ctrlWidget);
+                                if (ctrlIdx >= 0 && ctrlIdx < this.widgets_values.length) {
+                                    const savedValue = this.widgets_values[ctrlIdx];
+                                    if (savedValue === 'fixed') {
+                                        ctrlWidget.value = 'fixed';
+                                        try { ctrlWidget.callback?.call(this, 'fixed', ctrlWidget, this); } catch {}
+                                    }
+                                }
+                            }
+                        } catch (e) {
+                            console.warn('[Seed_Control] onConfigure restore error:', e);
+                        }
+                    }, 50);
+                }
+            } catch {}
             return r;
         };
 

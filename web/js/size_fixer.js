@@ -26,8 +26,16 @@ const DEFAULT_SIZE = {
     "A1r Translate ClipEncode Merge": [220, 470],
 
     // Utils nodes
-    "A1r Slider Custom": [210, 30]
-}
+    "A1r Slider Custom": [210, 30],
+    "A1r Boolean to Int": [210, 30],
+};
+
+// 最小尺寸限制（节点不能缩小到这个尺寸以下）
+const MIN_SIZE = {
+    // Utils nodes
+    "A1r Slider Custom": [210, 30],
+    "A1r Boolean to Int": [210, 30],
+};
 
 window.A1rSpace_SizeFixer = {
     registerDefaultSize: function (nodeName, size) {
@@ -97,22 +105,27 @@ app.registerExtension({
                 this._a1r_size_data = { userModified: false };
             }
 
+            // 获取最小尺寸限制
+            const minSize = MIN_SIZE[nodeData.name];
+            const minWidth = minSize ? minSize[0] : 0;
+            const minHeight = minSize ? minSize[1] : 0;
+
             if (info && info.size) {
                 if (info._a1r_size_userModified) {
                     this._a1r_size_data.userModified = true;
                 }
             
-                this._a1r_size_data.lastWidth = info.size[0];
-                this._a1r_size_data.lastHeight = info.size[1];
+                this._a1r_size_data.lastWidth = Math.max(info.size[0], minWidth);
+                this._a1r_size_data.lastHeight = Math.max(info.size[1], minHeight);
 
-                this.size = [...info.size];
+                this.size = [this._a1r_size_data.lastWidth, this._a1r_size_data.lastHeight];
             } else if (prevUserModified && prevSize) {
                 this._a1r_size_data.userModified = true;
 
-                this._a1r_size_data.lastWidth = prevSize[0];
-                this._a1r_size_data.lastHeight = prevSize[1];
+                this._a1r_size_data.lastWidth = Math.max(prevSize[0], minWidth);
+                this._a1r_size_data.lastHeight = Math.max(prevSize[1], minHeight);
 
-                this.size = [...prevSize];
+                this.size = [this._a1r_size_data.lastWidth, this._a1r_size_data.lastHeight];
             } else {
                 const defaultSize = DEFAULT_SIZE[nodeData.name];
                 if (defaultSize) {
@@ -134,6 +147,15 @@ app.registerExtension({
             }
 
             if (this.size) {
+                // 获取最小尺寸限制
+                const minSize = MIN_SIZE[nodeData.name];
+                const minWidth = minSize ? minSize[0] : 0;
+                const minHeight = minSize ? minSize[1] : 0;
+
+                // 确保尺寸不低于最小尺寸
+                this.size[0] = Math.max(this.size[0], minWidth);
+                this.size[1] = Math.max(this.size[1], minHeight);
+
                 this._a1r_size_data.userModified = true;
                 this._a1r_size_data.lastWidth = this.size[0];
                 this._a1r_size_data.lastHeight = this.size[1];

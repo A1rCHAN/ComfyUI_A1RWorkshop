@@ -21,8 +21,8 @@ class Int_to_Boolean:
         }
 
     RETURN_TYPES = ("BOOLEAN",)
-    RETURN_NAMES = ("boolean",)
     FUNCTION = "int_to_boolean"
+
     CATEGORY = "A1rSpace/Utils"
     DESCRIPTION = "Convert an integer to a boolean value."
 
@@ -43,8 +43,8 @@ class Simple_Boolean:
         }
 
     RETURN_TYPES = ("BOOLEAN",)
-    RETURN_NAMES = ("bool",)
     FUNCTION = "pass_through"
+
     CATEGORY = "A1rSpace/Utils"
     DESCRIPTION = "A simple boolean pass-through node."
 
@@ -68,6 +68,7 @@ class Boolean_Plus:
     RETURN_TYPES = ("BOOLEAN", "BOOLEAN", "BOOLEAN",)
     RETURN_NAMES = ("bool_a", "bool_b", "bool_c")
     FUNCTION = "pass_through"
+
     CATEGORY = "A1rSpace/Utils"
     DESCRIPTION = "A multiple way boolean node."
 
@@ -90,6 +91,7 @@ class Boolean_to_Int:
     RETURN_TYPES = ("INT",)
     RETURN_NAMES = ("integer",)
     FUNCTION = "boolean_to_int"
+
     CATEGORY = "A1rSpace/Utils"
     DESCRIPTION = "Convert a boolean value to a custom integer (configurable true/false mapping)."
     def boolean_to_int(self, input_bool, true_value, false_value):
@@ -107,14 +109,11 @@ class Boolean_AB:
     RETURN_TYPES = ("BOOLEAN", "BOOLEAN",)
     RETURN_NAMES = ("boolean_a", "boolean_b")
     FUNCTION = "boolean_ab"
+
     CATEGORY = "A1rSpace/Utils"
     DESCRIPTION = "Boolean toggle with always one behavior."
 
     def boolean_ab(self, enable_a, enable_b):
-        # 后端兜底：保证“两者必有其一为 True，且不同时为 True”
-        # 规则与前端保持一致：
-        # - 若两者都为 False，则设 A=True（优先 A）
-        # - 若两者都为 True，则设 B=False（保留 A）
         if not enable_a and not enable_b:
             enable_a = True
         elif enable_a and enable_b:
@@ -133,13 +132,11 @@ class Boolean_A_B:
     RETURN_TYPES = ("BOOLEAN", "BOOLEAN",)
     RETURN_NAMES = ("boolean_a", "boolean_b")
     FUNCTION = "boolean_a_b"
+
     CATEGORY = "A1rSpace/Utils"
-    DESCRIPTION = "Boolean toggle with always one behavior."
+    DESCRIPTION = "Boolean toggle with one main behavior."
 
     def boolean_a_b(self, enable_a, enable_b):
-        # 后端兜底：与前端逻辑一致
-        # - 当 A=False 且 B=True 时，强制 A=True（两者都为 True）
-        # - 其余情况保持输入（A=False,B=False 允许；A=True,* 保持传入）
         if (not enable_a) and enable_b:
             enable_a = True
         return (enable_a, enable_b)
@@ -194,6 +191,7 @@ class Math_LogicGate:
 
     RETURN_TYPES = ("BOOLEAN", "INT")
     FUNCTION = "logic_gate"
+
     CATEGORY = "A1rSpace/Utils"
     DESCRIPTION = "Perform logical operations on two boolean inputs."
 
@@ -233,6 +231,7 @@ class Save_PreviewImage:
     RETURN_TYPES = ()
     FUNCTION = "save_preview_image"
     OUTPUT_NODE = True
+
     CATEGORY = "A1rSpace/Utils"
     DESCRIPTION = "Conditionally saves images based on the enable_save parameter. When disabled, acts as a preview node."
 
