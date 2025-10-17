@@ -26,9 +26,13 @@ A comfyui custom node package used by myself.
   ```
   git pull
   ```
-
-## Fixed Bug:
- - Collapse outputs function can work normally now.
+## Update history
+### version 1.0.2:
+- Fixed collapse outputs function and other bugs, can work normally now.
+### version 1.0.1:
+- Demo version
+### version 1.0.0:
+- Push project
 
 ## Plan TODO:
 1. Improve front interaction.
