@@ -6,7 +6,7 @@ license = {file = "LICENSE"}
 dependencies = ["sefetensors", "transformers", "torch", "numpy", "einops", "Pillow", "kornia", "requests", "openai", "psutil", "huggingface-hub", "onnxruntime"]
 
 [project.urls]
-Repository = "https://github.com/a1rchan/ComfyUI_A1rSpace"
+Repository = "https://github.com/A1rCHAN/ComfyUI_A1rSpace"
 
 [tool.comfy]
 PublisherId = "a1rchan"
