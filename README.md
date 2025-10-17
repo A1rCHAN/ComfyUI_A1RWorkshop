@@ -1,7 +1,8 @@
 # ComfyUI_A1rSpace
 A comfyui custom node package used by myself.
 
-## Installation:
+## Installation and Update
+### Installation:
 * Clone the repo into the custom_nodes directory and install the requirements:
   ```
   git clone https://github.com/A1rCHAN/ComfyUI_A1rSpace.git
@@ -19,6 +20,15 @@ A comfyui custom node package used by myself.
     ```
     pip install -r requirements.txt
     ```
+
+### Update:
+* Inside `ComfyUI\custom_nodes\ComfyUI_A1rSpace`:
+  ```
+  git pull
+  ```
+
+## Fixed Bug:
+ - Collapse outputs function can work normally now.
 
 ## Plan TODO:
 1. Improve front interaction.
