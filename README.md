@@ -19,7 +19,6 @@ A comfyui custom node package used by myself.
     ```
     pip install -r requirements.txt
     ```
-## Nodes preview:
 
 ## Plan TODO:
 1. Improve front interaction.
