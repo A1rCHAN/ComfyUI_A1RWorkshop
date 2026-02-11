@@ -1,0 +1,39 @@
+/* Size Canvas 2D Slider Styles */
+
+/* 确保容器不会干扰鼠标事件 */
+.size-canvas-2d-slider-container {
+  pointer-events: none;
+}
+
+/* 只有slider-box接收鼠标事件 */
+.size-canvas-2d-slider-container .slider-box {
+  pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  touch-action: none;
+  -webkit-touch-callout: none;
+}
+
+/* 确保在拖拽时cursor正确显示 */
+.slider-box.dragging {
+  cursor: grabbing !important;
+}
+
+/* 防止nodes2.0中的canvas干扰 */
+.size-canvas-2d-slider-container .slider-box * {
+  pointer-events: none;
+}
+
+/* 确保在nodes2.0中正确显示 */
+.litegraph .size-canvas-2d-slider-container {
+  position: relative;
+  z-index: 1;
+}
+
+/* 防止拖拽时文本被选中 */
+.slider-box::selection,
+.slider-box *::selection {
+  background: transparent;
+}
