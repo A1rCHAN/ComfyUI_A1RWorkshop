@@ -529,7 +529,9 @@ app.registerExtension({
     // ----- 序列化 -----
     const originalOnSerialize = node.onSerialize;
     node.onSerialize = function (o) {
-      if (originalOnSerialize) originalOnSerialize.apply(this, arguments);
+      if (originalOnSerialize) {
+        originalOnSerialize.apply(this, arguments);
+      }
 
       // 快照当前状态到 properties
       updateButtonState(this);
@@ -538,17 +540,21 @@ app.registerExtension({
       // LiteGraph 在调用 onSerialize 之前已浅拷贝 properties，
       // 必须直接写入 o.properties
       if (!o.properties) o.properties = {};
-      o.properties._collected_widgets = this.properties._collected_widgets;
-      o.properties._isActive = this.properties._isActive;
-      o.properties._widgetState = this.properties._widgetState;
+      if (this.properties) {
+        o.properties._collected_widgets = this.properties._collected_widgets;
+        o.properties._isActive = this.properties._isActive;
+        o.properties._widgetState = this.properties._widgetState;
+      }
     };
 
     // ----- 反序列化（用于 undo/redo 等后续 configure 调用）-----
     const originalOnConfigure = node.onConfigure;
     node.onConfigure = function (info) {
-      if (originalOnConfigure) originalOnConfigure.apply(this, arguments);
+      if (originalOnConfigure) {
+        originalOnConfigure.apply(this, arguments);
+      }
 
-      if (this.collectedWidgets) {
+      if (this.collectedWidgets && this.properties) {
         restoreCollectorState(this, this.properties);
       }
     };

@@ -117,12 +117,28 @@ class WidgetCollector(io.ComfyNode):
     def execute(cls) -> io.NodeOutput:
         return io.NodeOutput()
 
+class NodeCollector(io.ComfyNode):
+    @classmethod
+    def define_schema(cls) -> io.Schema:
+        return io.Schema(
+            node_id="NodeCollector",
+            display_name="Node Collector",
+            category="A1R Workspace/Config Pads",
+            inputs=[],
+            outputs=[]
+        )
+
+    @classmethod
+    def execute(cls) -> io.NodeOutput:
+        return io.NodeOutput()
+
 class ConfigPads(ComfyExtension):
     async def get_node_list(self) -> list[type[io.ComfyNode]]:
         return [
             SizeCanvas,
             SeedControl,
-            WidgetCollector
+            WidgetCollector,
+            NodeCollector
             ]
 
 async def comfy_entrypoint() -> ConfigPads:
