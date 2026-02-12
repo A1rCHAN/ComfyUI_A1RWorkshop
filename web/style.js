@@ -1,5 +1,5 @@
-/*
- * Unified styles and widget factories for A1R Workshop nodes
+/**
+ * 全局自定义样式以及官方样式调用
  */
 import { hexToRgba } from "./theme.js";
 
