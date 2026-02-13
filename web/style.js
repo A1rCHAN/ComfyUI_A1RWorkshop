@@ -70,17 +70,16 @@ export const STYLE = {
     padding: "20px",
     minWidth: "500px",
     maxWidth: "600px",
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif"
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif",
+    flexShrink: "0"
   },
   dialogTitle: {
     fontSize: "16px",
     fontWeight: "600",
     marginBottom: "20px",
-    padding: "12px 16px",
+    padding: "10px 16px",
     borderRadius: "20px 20px 0 0",
-    marginLeft: "-20px",
-    marginRight: "-20px",
-    marginTop: "-20px"
+    margin: "-20px -20px 20px",
   },
   dialogButtonBar: {
     display: "flex",
@@ -98,17 +97,43 @@ export const STYLE = {
   },
   controlWrapper: {
     display: "flex",
+    minHeight: "32px",
+    padding: "2px 4px",
+    border: "none",
+    borderRadius: "6px",
+    outline: "none",
     alignItems: "center",
-    gap: "12px",
-    flexGrow: "1",
-    padding: "8px 12px",
-    borderRadius: "10px"
+    gap: "0",
+    flexGrow: "1"
   },
   valueDisplay: {
     fontSize: "14px",
     fontWeight: "500",
     minWidth: "50px",
     flexShrink: "0"
+  },
+  selector: {
+    width: "100%",
+    height: "100%",
+    border: "none",
+    borderRadius: "6px",
+    outline: "none",
+    padding: "0 20px",
+    fontSize: "14px",
+    fontWeight: "500",
+    cursor: "pointer"
+  },
+
+  // --- Textarea ---
+  textarea: {
+    width: "100%",
+    minHeight: "120px",
+    padding: "10px",
+    border: "none",
+    borderRadius: "6px",
+    outline: "none",
+    boxSizing: "border-box",
+    fontFamily: "monospace"
   },
 
   // --- Slider ---
@@ -195,6 +220,22 @@ export const STYLE = {
     padding: "1px 6px",
     borderRadius: "4px",
     flexShrink: "0"
+  },
+
+  // --- Toast ---
+  toast: {
+    position: "fixed",
+    top: "20px",
+    left: "50%",
+    transform: "translateX(-50%)",
+    zIndex: "10000",
+    padding: "10px 20px",
+    borderRadius: "8px",
+    fontSize: "14px",
+    fontWeight: "500",
+    pointerEvents: "none",
+    opacity: "0",
+    transition: "opacity 0.3s ease"
   },
 
   // --- 2D Canvas Slider ---
@@ -303,15 +344,13 @@ export const STYLE = {
 
 // --- Base Layout ---
 
-export function createContainer(customStyle) {
+export function createContainer(theme, customStyle) {
   const el = document.createElement("div");
-  Object.assign(el.style, STYLE.container, customStyle);
-  return el;
-}
-
-export function createRow(customStyle) {
-  const el = document.createElement("div");
-  Object.assign(el.style, STYLE.row, customStyle);
+  el.className = "container";
+  Object.assign(el.style, STYLE.container, {
+    background: theme.primary,
+    border: "none"
+  }, customStyle);
   return el;
 }
 
@@ -319,6 +358,7 @@ export function createRow(customStyle) {
 
 export function createButton(label, theme, customStyle) {
   const el = document.createElement("div");
+  el.className = "button";
   Object.assign(el.style, STYLE.button, {
     background: theme.background,
     color: theme.text,
@@ -329,6 +369,7 @@ export function createButton(label, theme, customStyle) {
 
 export function createDialogButton(label, theme, customStyle) {
   const el = document.createElement("button");
+  el.className = "dialog-button";
   Object.assign(el.style, STYLE.dialogButton, {
     background: theme.background,
     color: theme.text,
@@ -353,6 +394,7 @@ export function addButtonHover(btn, theme, hoverOpacity = 0.25) {
 
 export function createOverlay(theme) {
   const el = document.createElement("div");
+  el.className = "overlay";
   Object.assign(el.style, STYLE.overlay, {
     backgroundColor: hexToRgba(theme.shadow, 0.3),
   });
@@ -361,6 +403,7 @@ export function createOverlay(theme) {
 
 export function createDialog(theme) {
   const el = document.createElement("div");
+  el.className = "dialog";
   Object.assign(el.style, STYLE.dialog, {
     background: theme.primary,
     border: `1px solid ${theme.secondary}`,
@@ -372,6 +415,7 @@ export function createDialog(theme) {
 
 export function createDialogTitle(text, theme) {
   const el = document.createElement("div");
+  el.className = "dialog-title";
   Object.assign(el.style, STYLE.dialogTitle, {
     color: theme.text,
     background: theme.title,
@@ -382,6 +426,7 @@ export function createDialogTitle(text, theme) {
 
 export function createDialogButtonBar() {
   const el = document.createElement("div");
+  el.className = "dialog-button-bar";
   Object.assign(el.style, STYLE.dialogButtonBar);
   return el;
 }
@@ -409,6 +454,7 @@ export function createControlWrapper(theme) {
 
 export function createValueDisplay(value, theme, align = "left") {
   const el = document.createElement("div");
+  el.className = "value-display";
   Object.assign(el.style, STYLE.valueDisplay, {
     color: theme.text,
     textAlign: align,
@@ -417,16 +463,40 @@ export function createValueDisplay(value, theme, align = "left") {
   return el;
 }
 
+export function createSelector(theme) {
+  const el = document.createElement("select");
+  el.className = "selector";
+  Object.assign(el.style, STYLE.selector, {
+    background: "transparent",
+    color: theme.text
+  });
+  return el;
+}
+
+// --- Textarea ---
+
+export function createTextarea(theme) {
+  const el = document.createElement("textarea");
+  el.className = "textarea";
+  Object.assign(el.style, STYLE.textarea, {
+    background: theme.background,
+    color: theme.text
+  });
+  return el;
+}
+
 // --- Slider ---
 
 export function createSliderContainer() {
   const el = document.createElement("div");
+  el.className = "slider-container";
   Object.assign(el.style, STYLE.sliderContainer);
   return el;
 }
 
 export function createSliderTrack(theme) {
   const el = document.createElement("div");
+  el.className = "slider-track";
   Object.assign(el.style, STYLE.sliderTrack, {
     background: theme.secondary,
   });
@@ -435,6 +505,7 @@ export function createSliderTrack(theme) {
 
 export function createActiveTrack(theme, customStyle) {
   const el = document.createElement("div");
+  el.className = "active-track";
   Object.assign(el.style, STYLE.activeTrack, {
     background: theme.border,
   }, customStyle);
@@ -443,6 +514,7 @@ export function createActiveTrack(theme, customStyle) {
 
 export function createSliderThumb(theme, customStyle) {
   const el = document.createElement("div");
+  el.className = "slider-thumb";
   Object.assign(el.style, STYLE.sliderThumb, {
     background: theme.border,
     boxShadow: `0 2px 8px ${hexToRgba(theme.shadow, 0.3)}`,
@@ -452,6 +524,7 @@ export function createSliderThumb(theme, customStyle) {
 
 export function createHiddenSlider(config = {}, customStyle) {
   const el = document.createElement("input");
+  el.className = "hidden-slider";
   el.type = "range";
   if (config.min !== undefined) el.min = config.min;
   if (config.max !== undefined) el.max = config.max;
@@ -465,6 +538,7 @@ export function createHiddenSlider(config = {}, customStyle) {
 
 export function createPopover(theme) {
   const el = document.createElement("div");
+  el.className = "popover";
   Object.assign(el.style, STYLE.popover, {
     background: theme.primary,
     border: `1px solid ${theme.secondary}`,
@@ -475,6 +549,7 @@ export function createPopover(theme) {
 
 export function createPopoverTitle(text, theme) {
   const el = document.createElement("div");
+  el.className = "popover-title";
   Object.assign(el.style, STYLE.popoverTitle, {
     color: hexToRgba(theme.text, 0.5),
     borderBottom: `1px solid ${theme.secondary}`,
@@ -485,6 +560,7 @@ export function createPopoverTitle(text, theme) {
 
 export function createPopoverItem(theme, options = {}) {
   const el = document.createElement("div");
+  el.className = "popover-item";
   Object.assign(el.style, STYLE.popoverItem, {
     fontWeight: options.isCurrent ? "600" : "400",
     color: options.isCurrent ? hexToRgba(theme.text, 0.4) : theme.text,
@@ -495,6 +571,7 @@ export function createPopoverItem(theme, options = {}) {
 
 export function createPopoverBadge(text, theme) {
   const el = document.createElement("span");
+  el.className = "popover-badge";
   Object.assign(el.style, STYLE.popoverBadge, {
     color: hexToRgba(theme.text, 0.35),
     background: hexToRgba(theme.border, 0.15),
@@ -503,7 +580,18 @@ export function createPopoverBadge(text, theme) {
   return el;
 }
 
+// --- Toast ---
 
+export function createToast(theme) {
+  const el = document.createElement("div");
+  el.className = "toast";
+  Object.assign(el.style, STYLE.toast, {
+    background: theme.primary,
+    color: theme.text,
+    boxShadow: `0 2px 8px ${hexToRgba(theme.shadow, 0.3)}`,
+  });
+  return el;
+}
 
 // --- 2D Canvas Slider ---
 
@@ -525,6 +613,7 @@ export function createSliderBox(theme) {
 
 export function createCanvasGrid(theme) {
   const el = document.createElement("div");
+  el.className = "canvas-grid";
   Object.assign(el.style, STYLE.canvasGrid, {
     boxShadow: `inset 0 0 0 1px ${theme.background}`,
   });
@@ -533,6 +622,7 @@ export function createCanvasGrid(theme) {
 
 export function createCanvasZone(theme, opacity, zIndex) {
   const el = document.createElement("div");
+  el.className = "canvas-zone";
   Object.assign(el.style, STYLE.canvasZone, {
     background: hexToRgba(theme.primary, opacity),
     zIndex: zIndex ?? "1",
@@ -542,6 +632,7 @@ export function createCanvasZone(theme, opacity, zIndex) {
 
 export function createCanvasSelectedArea(theme) {
   const el = document.createElement("div");
+  el.className = "canvas-selected-area";
   Object.assign(el.style, STYLE.canvasZone, {
     background: hexToRgba(theme.border, 0.5),
     zIndex: "3",
@@ -551,18 +642,21 @@ export function createCanvasSelectedArea(theme) {
 
 export function createGuideLineH() {
   const container = document.createElement("div");
+  container.className = "guide-line-h";
   Object.assign(container.style, STYLE.guideLineH);
   return container;
 }
 
 export function createGuideLineV() {
   const container = document.createElement("div");
+  container.className = "guide-line-v";
   Object.assign(container.style, STYLE.guideLineV);
   return container;
 }
 
 export function createGuideLineHVisual(theme) {
   const el = document.createElement("div");
+  el.className = "guide-line-h-visual";
   Object.assign(el.style, STYLE.guideLineVisual, STYLE.guideLineHVisual, {
     background: theme.border,
   });
@@ -571,6 +665,7 @@ export function createGuideLineHVisual(theme) {
 
 export function createGuideLineVVisual(theme) {
   const el = document.createElement("div");
+  el.className = "guide-line-v-visual";
   Object.assign(el.style, STYLE.guideLineVisual, STYLE.guideLineVVisual, {
     background: theme.border,
   });
@@ -579,6 +674,7 @@ export function createGuideLineVVisual(theme) {
 
 export function createGuidePoint(theme) {
   const el = document.createElement("div");
+  el.className = "guide-point";
   Object.assign(el.style, STYLE.guidePoint, {
     background: theme.border,
     boxShadow: `0 2px 8px ${hexToRgba(theme.shadow, 0.3)}`,
@@ -588,6 +684,7 @@ export function createGuidePoint(theme) {
 
 export function createCoordTooltip(theme) {
   const el = document.createElement("div");
+  el.className = "coord-tooltip";
   Object.assign(el.style, STYLE.coordTooltip, {
     background: theme.primary,
     color: theme.text,
@@ -604,7 +701,6 @@ export function createCoordTooltip(theme) {
 export const custom = {
   // Layout
   container: createContainer,
-  row: createRow,
   // Buttons
   button: createButton,
   dialogButton: createDialogButton,
@@ -618,6 +714,9 @@ export const custom = {
   sectionLabel: createSectionLabel,
   controlWrapper: createControlWrapper,
   valueDisplay: createValueDisplay,
+  selector: createSelector,
+  // Text
+  textarea: createTextarea,
   // Slider
   sliderContainer: createSliderContainer,
   sliderTrack: createSliderTrack,
@@ -629,6 +728,8 @@ export const custom = {
   popoverTitle: createPopoverTitle,
   popoverItem: createPopoverItem,
   popoverBadge: createPopoverBadge,
+  // Toast
+  toast: createToast,
   // 2D Canvas
   canvas2dContainer: createCanvas2dContainer,
   sliderBox: createSliderBox,
