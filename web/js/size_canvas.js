@@ -76,7 +76,7 @@ function showCanvasSettingDialog({ currentMin, currentMax, currentStep }) {
     /**
      * Range水平容器
      */
-    const rangeRow = custom.row();
+    const rangeRow = custom.container();
 
     /**
      * Range标题
@@ -389,7 +389,7 @@ function showCanvasSettingDialog({ currentMin, currentMax, currentStep }) {
     /**
      * Step水平容器
      */
-    const stepRow = custom.row();
+    const stepRow = custom.container();
 
     /**
      * Step标题

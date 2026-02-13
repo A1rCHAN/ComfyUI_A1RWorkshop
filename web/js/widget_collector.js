@@ -450,7 +450,7 @@ function createButtonWidget(node) {
   const adapter = new ComfyThemeAdapter();
   let theme = adapter.theme;
 
-  const container = custom.container();
+  const container = custom.container(theme);
 
   node.contentText = node.widgetState?.contentText || "Open Collector";
   node.widgetDisplay = node.widgetState?.widgetDisplay || "flex";

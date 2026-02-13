@@ -286,7 +286,7 @@ function createButtonWidget(node) {
   const adapter = new ComfyThemeAdapter();
   let theme = adapter.theme;
 
-  const container = custom.container();
+  const container = custom.container(theme);
 
   const manualBtn = custom.button("manual random", theme);
   const historyBtn = custom.button("pull history", theme);
