@@ -1652,15 +1652,15 @@ app.registerExtension({
     return [
       null,
       {
-        content: "Canvas Range",
-        has_submenu: true,
-        submenu: {
-          options: [
-            { content: "Canvas Setting", callback: openCanvasSetting },
-            { content: "Show Current", callback: showCurrentConfig },
-            { content: "Reset", callback: resetToDefault }
-          ]
-        }
+        content: "Canvas Setting", callback: openCanvasSetting
+        //has_submenu: true,
+        //submenu: {
+          //options: [
+            //{ content: "Canvas Setting", callback: openCanvasSetting },
+            //{ content: "Show Current", callback: showCurrentConfig },
+            //{ content: "Reset", callback: resetToDefault }
+          //]
+        //}
       }
     ];
   }
