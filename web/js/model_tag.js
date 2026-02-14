@@ -614,7 +614,7 @@ function showEditor() {
 
       adapter.bindElement(cancelBtn, { background: "background", color: "text" });
       adapter.bindElement(saveBtn, { background: "background", color: "text" });
-      adapter.bindElement(applyBtn, { background: (t) => hexToRgba(t.prompt, 0.2), color: "text" });
+      adapter.bindElement(applyBtn, { background: "background", color: "text" });
 
       bottomBar.appendChild(cancelBtn);
       bottomBar.appendChild(saveBtn);
@@ -1148,10 +1148,10 @@ function collectEmbeddingTags() {
   for (const node of app.graph._nodes) {
     if (!isModelLoaderNode(node)) continue;
     
-    const currentModel = getCurrentModelFromNode(node);
+    const currentModel = getModelFromNode(node);
     if (!currentModel) continue;
     
-    const tagEntry = findTagEntryByModel(currentModel);
+    const tagEntry = findEntry(currentModel);
     if (tagEntry) {
       tags.push({
         nodeId: node.id,
