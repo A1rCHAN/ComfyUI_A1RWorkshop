@@ -1,13 +1,10 @@
-import { app } from "/scripts/app.js";
-import { hexToRgba } from "../theme.js";
 import { ComfyThemeAdapter } from "../adapter.js";
 import { custom } from "../style.js";
+import { hexToRgba } from "../theme.js";
+import { DialogBuilder, DIALOG_TYPE } from "../dialog.js";
+import { app } from "/scripts/app.js";
 
 // ========== 抑制 PrimeVue Select 已知 bug ==========
-// PrimeVue Select 组件在 onOverlayLeave 中通过 $nextTick 试图 focus 已被卸载的 filterInput.$el，
-// 导致 "Cannot read properties of null (reading '$el')" 错误。
-// ComfyUI 的 SelectPlus 覆盖了此方法，但在 desktop app 编译版中未生效。
-// 此处捕获并抑制该特定的 unhandled promise rejection。
 if (!window.__pv_select_el_null_suppressed) {
   window.__pv_select_el_null_suppressed = true;
   window.addEventListener('unhandledrejection', (event) => {
@@ -43,652 +40,548 @@ function showCanvasSettingDialog({ currentMin, currentMax, currentStep }) {
   return new Promise((resolve) => {
     const adapter = new ComfyThemeAdapter();
     let theme = adapter.theme;
-    
-    /**
-     * 创建遮罩层
-     */
-    const overlay = custom.overlay(theme);
 
-    /**
-     * 创建对话框
-     */
-    const dialog = custom.dialog(theme);
-
-    /**
-     * 标题
-     */
-    const titleEl = custom.dialogTitle("Canvas Setting", theme);
-    dialog.appendChild(titleEl);
-    
-    // 主题适配：绑定需要跟随主题变化的元素
-    adapter.bindElement(dialog, {
-      background: "primary",
-      color: "text",
-      boxShadow: (t) => `0 4px 16px ${hexToRgba(t.shadow, 0.5)}`
-    });
-    adapter.bindElement(titleEl, { color: "text", background: "title" });
-    adapter.onThemeChange((newTheme) => { theme = newTheme; });
-
-    // ========== Size Range ==========
-    const rangeSection = document.createElement("div");
-    rangeSection.style.marginBottom = "24px";
-
-    /**
-     * Range水平容器
-     */
-    const rangeRow = custom.container(theme);
-
-    /**
-     * Range标题
-     */
-    const rangeLabel = custom.sectionLabel("range", theme);
-    rangeRow.appendChild(rangeLabel);
-
-    /**
-     * Range控件容器 (滑轨+数值的背景容器)
-     */
-    const rangeControlWrapper = custom.controlWrapper(theme);
-    rangeRow.appendChild(rangeControlWrapper);
-
-    /**
-     * Range Min值显示
-     */
-    const rangeMinDisplay = custom.valueDisplay(currentMin, theme, "left");
-    rangeControlWrapper.appendChild(rangeMinDisplay);
-
-    /**
-     * Range slider容器
-     */
-    const rangeSliderContainer = custom.sliderContainer();
-    rangeControlWrapper.appendChild(rangeSliderContainer);
-
-    /**
-     * Range slider轨道
-     */
-    const THUMB_R = 8; // 滑块半径，用于inset计算
-    const rangeTrack = custom.sliderTrack(theme);
-    rangeSliderContainer.appendChild(rangeTrack);
-
-    // Range slider活动区域
-    const rangeActiveTrack = custom.activeTrack(theme);
-    rangeSliderContainer.appendChild(rangeActiveTrack);
-
-    // Min slider
-    const minSlider = custom.hiddenSlider(
-      { min: currentStep, max: 4096, step: currentStep, value: currentMin },
-      { zIndex: "4" }
-    );
-
-    // Max slider
-    const maxSlider = custom.hiddenSlider(
-      { min: currentStep, max: 4096, step: currentStep, value: currentMax },
-      { zIndex: "5" }
-    );
-
-    // Min 滑块
-    const minThumb = custom.sliderThumb(theme);
-    
-    // Max 滑块
-    const maxThumb = custom.sliderThumb(theme);
-    
-    rangeSliderContainer.appendChild(minThumb);
-    rangeSliderContainer.appendChild(maxThumb);
-
-    /**
-     * 更新Range视觉显示
-    */
-    const MAX_RANGE = 4096;
-    const MIN_RANGE = 128;
-
-    // 当前值（脱离原生slider，自主管理）
-    let rangeMinVal = currentMin;
-    let rangeMaxVal = currentMax;
-
-    const updateRangeVisual = () => {
-      // 同步到隐藏 slider（供 confirm 读取）
-      minSlider.value = rangeMinVal;
-      maxSlider.value = rangeMaxVal;
-
-      rangeMinDisplay.textContent = rangeMinVal;
-      rangeMaxDisplay.textContent = rangeMaxVal;
-
-      // 更新活动轨道和滑块位置
-      const minPercent = ((rangeMinVal - MIN_RANGE) / (MAX_RANGE - MIN_RANGE)) * 100;
-      const maxPercent = ((rangeMaxVal - MIN_RANGE) / (MAX_RANGE - MIN_RANGE)) * 100;
-
-      rangeActiveTrack.style.left = `calc(${THUMB_R}px + (100% - ${THUMB_R * 2}px) * ${minPercent / 100})`;
-      rangeActiveTrack.style.right = `calc(${THUMB_R}px + (100% - ${THUMB_R * 2}px) * ${(100 - maxPercent) / 100})`;
-
-      minThumb.style.left = `calc(${THUMB_R}px + (100% - ${THUMB_R * 2}px) * ${minPercent / 100})`;
-      maxThumb.style.left = `calc(${THUMB_R}px + (100% - ${THUMB_R * 2}px) * ${maxPercent / 100})`;
-    };
-
-    /**
-     * Snap值到step的倍数，并处理最大值snap
-     */
-    const snapToStep = (val, stepVal, snapToMax) => {
-      const snapped = Math.round(val / stepVal) * stepVal;
-      if (snapToMax && snapped > MAX_RANGE - stepVal) return MAX_RANGE;
-      return Math.max(stepVal, Math.min(MAX_RANGE, snapped));
-    };
-
-    /**
-     * 像素位置转换为值
-     */
-    const pxToValue = (mouseX, rect) => {
-      const trackWidth = rect.width - THUMB_R * 2;
-      const x = mouseX - THUMB_R;
-      const ratio = Math.max(0, Math.min(1, x / trackWidth));
-      return MIN_RANGE + ratio * (MAX_RANGE - MIN_RANGE);
-    };
-
-    /**
-     * 值转换为像素位置
-     */
-    const valueToThumbX = (val, rect) => {
-      return THUMB_R + ((val - MIN_RANGE) / (MAX_RANGE - MIN_RANGE)) * (rect.width - THUMB_R * 2);
-    };
-
-    // 禁用原生 slider 交互（仅作为数据容器）
-    minSlider.style.pointerEvents = "none";
-    maxSlider.style.pointerEvents = "none";
-
-    /**
-     * 自定义拖拽系统
-     */
-    let isDragging = false;
-    let dragTarget = null; // "min" | "max" | null
-    let dragStartMouseX = 0;
-    let dragStartMinVal = 0;
-    let dragStartMaxVal = 0;
-
-    const getStepVal = () => parseInt(stepSlider.value);
-
-    const rangeMouseDown = (e) => {
-      // 用户手动操作range，重置step水位线，允许后续step增大时正常sync
-      peakStepVal = stepCurrentVal;
-
-      const rect = rangeSliderContainer.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const stepVal = getStepVal();
-
-      const minThumbX = valueToThumbX(rangeMinVal, rect);
-      const maxThumbX = valueToThumbX(rangeMaxVal, rect);
-
-      const nearMin = Math.abs(mouseX - minThumbX) <= THUMB_R + 4;
-      const nearMax = Math.abs(mouseX - maxThumbX) <= THUMB_R + 4;
-
-      if (nearMin || nearMax) {
-        // 点击在滑块上：记录偏移量，拖拽时保持相对位置
-        if (nearMin && nearMax) {
-          // 重叠时选距离点击更近的，相等选max
-          dragTarget = (mouseX - minThumbX < maxThumbX - mouseX) ? "min" : "max";
-        } else {
-          dragTarget = nearMin ? "min" : "max";
-        }
-      } else {
-        // 点击在轨道空白处：不吸附到鼠标，而是向点击方向移动一步
-        const clickVal = pxToValue(mouseX, rect);
-        const midPoint = (rangeMinVal + rangeMaxVal) / 2;
-
-        if (clickVal < midPoint) {
-          // 点击在min侧：min向点击方向移动一步
-          dragTarget = "min";
-          const direction = clickVal < rangeMinVal ? -1 : 1;
-          rangeMinVal = snapToStep(rangeMinVal + direction * stepVal, stepVal, false);
-          if (rangeMinVal >= rangeMaxVal) {
-            rangeMaxVal = rangeMinVal + stepVal;
-            if (rangeMaxVal > MAX_RANGE) {
-              rangeMaxVal = MAX_RANGE;
-              rangeMinVal = rangeMaxVal - stepVal;
-            }
-          }
-        } else {
-          // 点击在max侧：max向点击方向移动一步
-          dragTarget = "max";
-          const direction = clickVal < rangeMaxVal ? -1 : 1;
-          rangeMaxVal = snapToStep(rangeMaxVal + direction * stepVal, stepVal, true);
-          if (rangeMaxVal <= rangeMinVal) {
-            rangeMinVal = rangeMaxVal - stepVal;
-            if (rangeMinVal < stepVal) {
-              rangeMinVal = stepVal;
-              rangeMaxVal = rangeMinVal + stepVal;
-            }
-          }
-        }
-        updateRangeVisual();
-      }
-
-      isDragging = true;
-      dragStartMouseX = mouseX;
-      dragStartMinVal = rangeMinVal;
-      dragStartMaxVal = rangeMaxVal;
-
-      // 视觉反馈
-      const activeThumb = dragTarget === "min" ? minThumb : maxThumb;
-      activeThumb.style.transform = "translate(-50%, -50%) scale(1.2)";
-      activeThumb.style.outline = `2px solid ${theme.text}`;
-      rangeSliderContainer.style.cursor = "grabbing";
-
-      e.preventDefault();
-    };
-
-    const rangeMouseMove = (e) => {
-      if (!isDragging || !dragTarget) return;
-
-      const rect = rangeSliderContainer.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const stepVal = getStepVal();
-      const deltaX = mouseX - dragStartMouseX;
-      const trackWidth = rect.width - THUMB_R * 2;
-      const deltaValue = (deltaX / trackWidth) * (MAX_RANGE - MIN_RANGE);
-
-      if (dragTarget === "min") {
-        let newMin = snapToStep(dragStartMinVal + deltaValue, stepVal, false);
-        newMin = Math.max(stepVal, newMin);
-
-        // 推动max
-        if (newMin + stepVal > rangeMaxVal) {
-          rangeMaxVal = newMin + stepVal;
-          if (rangeMaxVal > MAX_RANGE) {
-            rangeMaxVal = MAX_RANGE;
-            newMin = rangeMaxVal - stepVal;
-          }
-        }
-        rangeMinVal = newMin;
-      } else {
-        let newMax = snapToStep(dragStartMaxVal + deltaValue, stepVal, true);
-        newMax = Math.min(MAX_RANGE, newMax);
-        if (newMax < stepVal * 2) newMax = stepVal * 2;
-
-        // 推动min
-        if (newMax - stepVal < rangeMinVal) {
-          rangeMinVal = newMax - stepVal;
-          if (rangeMinVal < stepVal) {
-            rangeMinVal = stepVal;
-            newMax = rangeMinVal + stepVal;
-          }
-        }
-        rangeMaxVal = newMax;
-      }
-
-      updateRangeVisual();
-    };
-
-    const rangeMouseUp = (e) => {
-      if (!isDragging) return;
-      isDragging = false;
-
-      // 重置视觉
-      minThumb.style.transform = "translate(-50%, -50%) scale(1)";
-      maxThumb.style.transform = "translate(-50%, -50%) scale(1)";
-      rangeSliderContainer.style.cursor = "pointer";
-
-      // 触发 hover 检测
-      updateRangeHover(e);
-      dragTarget = null;
-    };
-
-    /**
-     * Hover光标管理
-     */
-    const updateRangeHover = (e) => {
-      if (isDragging) return;
-
-      const rect = rangeSliderContainer.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const minThumbX = valueToThumbX(rangeMinVal, rect);
-      const maxThumbX = valueToThumbX(rangeMaxVal, rect);
-
-      const nearMin = Math.abs(mouseX - minThumbX) <= 20;
-      const nearMax = Math.abs(mouseX - maxThumbX) <= 20;
-
-      if (nearMin || nearMax) {
-        rangeSliderContainer.style.cursor = "grab";
-        if (nearMin) minThumb.style.outline = `2px solid ${theme.text}`;
-        else minThumb.style.outline = "none";
-        if (nearMax) maxThumb.style.outline = `2px solid ${theme.text}`;
-        else maxThumb.style.outline = "none";
-      } else {
-        rangeSliderContainer.style.cursor = "pointer";
-        minThumb.style.outline = "none";
-        maxThumb.style.outline = "none";
-      }
-    };
-
-    rangeSliderContainer.addEventListener("mousedown", rangeMouseDown);
-    document.addEventListener("mousemove", rangeMouseMove);
-    const handleSliderMouseUp = rangeMouseUp;
-    document.addEventListener("mouseup", handleSliderMouseUp);
-    rangeSliderContainer.addEventListener("mousemove", updateRangeHover);
-    rangeSliderContainer.addEventListener("mouseenter", updateRangeHover);
-    rangeSliderContainer.addEventListener("mouseleave", () => {
-      if (!isDragging) {
-        minThumb.style.outline = "none";
-        maxThumb.style.outline = "none";
-        rangeSliderContainer.style.cursor = "pointer";
-      }
-    });
-
-    rangeSliderContainer.appendChild(minSlider);
-    rangeSliderContainer.appendChild(maxSlider);
-
-    /**
-     * Range Max值显示
-     */
-    const rangeMaxDisplay = custom.valueDisplay(currentMax, theme, "right");
-    rangeControlWrapper.appendChild(rangeMaxDisplay);
-
-    rangeSection.appendChild(rangeRow);
-    dialog.appendChild(rangeSection);
-
-    // ========== Step Section ==========
-    const stepSection = document.createElement("div");
-    stepSection.style.marginBottom = "24px";
-
-    /**
-     * Step水平容器
-     */
-    const stepRow = custom.container(theme);
-
-    /**
-     * Step标题
-     */
-    const stepLabel = custom.sectionLabel("step", theme);
-    stepRow.appendChild(stepLabel);
-
-    /**
-     * Step控件容器 (滑轨+数值的背景容器)
-     */
-    const stepControlWrapper = custom.controlWrapper(theme);
-    stepRow.appendChild(stepControlWrapper);
-
-    /**
-    * Step Min 值显示 (固定128)
-     */
-    const stepMinDisplay = custom.valueDisplay("128", theme, "left");
-    stepControlWrapper.appendChild(stepMinDisplay);
-
-    /**
-     * Step slider容器
-     */
-    const stepSliderContainer = custom.sliderContainer();
-    stepControlWrapper.appendChild(stepSliderContainer);
-
-    /**
-     * Step slider轨道
-     */
-    const stepTrack = custom.sliderTrack(theme);
-    stepSliderContainer.appendChild(stepTrack);
-
-    /**
-     * Step slider活动区域
-     */
-    const stepActiveTrack = custom.activeTrack(theme, { left: "0" });
-    stepSliderContainer.appendChild(stepActiveTrack);
-
-    /**
-    * Step slider (隐藏，仅作数据容器)
-     */
-    const stepSlider = custom.hiddenSlider(
-      { min: 128, max: 1024, step: 128, value: currentStep }
-    );
-
-    /**
-     * Step 滑块
-     */
-    const stepThumb = custom.sliderThumb(theme, { zIndex: "6" });
-    stepSliderContainer.appendChild(stepThumb);
-
-    stepSliderContainer.appendChild(stepSlider);
-
-    /**
-    * Step 值显示
-     */
-    const stepValueDisplay = custom.valueDisplay(currentStep, theme, "right");
-    stepControlWrapper.appendChild(stepValueDisplay);
-
-    /**
-     * 更新Step显示
-     */
-    const STEP_MIN = 128;
-    const STEP_MAX = 1024;
-    let stepCurrentVal = currentStep;
-
-    const updateStepVisual = () => {
-      stepSlider.value = stepCurrentVal;
-      stepValueDisplay.textContent = stepCurrentVal;
-
-      // 更新活动轨道和滑块位置
-      const stepPercent = ((stepCurrentVal - STEP_MIN) / (STEP_MAX - STEP_MIN)) * 100;
-      stepActiveTrack.style.right = `calc(${THUMB_R}px + (100% - ${THUMB_R * 2}px) * ${(100 - stepPercent) / 100})`;
-      stepThumb.style.left = `calc(${THUMB_R}px + (100% - ${THUMB_R * 2}px) * ${stepPercent / 100})`;
-    };
-
-    let peakStepVal = currentStep; // 记录step达到的历史最大值（水位线）
-
-    const syncRangeToStep = () => {
-      const stepVal = stepCurrentVal;
-
-      // step未超过历史最大值时不改变range，避免回调后再增大时累积偏移
-      if (stepVal <= peakStepVal) {
-        return;
-      }
-      peakStepVal = stepVal;
-
-      // step 尚未超过当前 min 时，不移动 range（step 推动 min，min 推动 max）
-      if (stepVal <= rangeMinVal) {
-        return;
-      }
-
-      // 重新snap当前值到新的step网格
-      // min：step超过min时才推动
-      if (stepVal > rangeMinVal) {
-        rangeMinVal = snapToStep(rangeMinVal, stepVal, false);
-      }
-      // max：step 超过 max 时才推动，否则保持原位
-      if (stepVal > rangeMaxVal) {
-        rangeMaxVal = snapToStep(rangeMaxVal, stepVal, true);
-      }
-
-      // 确保间距（min 被推动后可能逼近 max）
-      if (rangeMaxVal - rangeMinVal < stepVal) {
-        rangeMaxVal = rangeMinVal + stepVal;
-        if (rangeMaxVal > MAX_RANGE) {
-          rangeMaxVal = MAX_RANGE;
-          rangeMinVal = rangeMaxVal - stepVal;
-        }
-      }
-      updateRangeVisual();
-    };
-
-    /**
-    * Step 自定义拖拽
-     */
-    let isStepDragging = false;
-    let stepDragStartMouseX = 0;
-    let stepDragStartVal = 0;
-
-    const stepPxToValue = (mouseX, rect) => {
-      const trackWidth = rect.width - THUMB_R * 2;
-      const x = mouseX - THUMB_R;
-      const ratio = Math.max(0, Math.min(1, x / trackWidth));
-      const raw = STEP_MIN + ratio * (STEP_MAX - STEP_MIN);
-      return Math.max(STEP_MIN, Math.min(STEP_MAX, Math.round(raw / STEP_MIN) * STEP_MIN));
-    };
-
-    const stepValueToThumbX = (val, rect) => {
-      return THUMB_R + ((val - STEP_MIN) / (STEP_MAX - STEP_MIN)) * (rect.width - THUMB_R * 2);
-    };
-
-    const stepMouseDown = (e) => {
-      const rect = stepSliderContainer.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const thumbX = stepValueToThumbX(stepCurrentVal, rect);
-      const nearThumb = Math.abs(mouseX - thumbX) <= THUMB_R + 4;
-
-      if (!nearThumb) {
-        // 点击轨道空白处：向点击方向移动一步
-        const direction = mouseX > thumbX ? 1 : -1;
-        stepCurrentVal = Math.max(STEP_MIN, Math.min(STEP_MAX, stepCurrentVal + direction * STEP_MIN));
-        updateStepVisual();
-        syncRangeToStep();
-      }
-
-      isStepDragging = true;
-      stepDragStartMouseX = mouseX;
-      stepDragStartVal = stepCurrentVal;
-
-      stepThumb.style.transform = "translate(-50%, -50%) scale(1.2)";
-      stepThumb.style.outline = `2px solid ${theme.text}`;
-      stepSliderContainer.style.cursor = "grabbing";
-      e.preventDefault();
-    };
-
-    const stepMouseMove = (e) => {
-      if (!isStepDragging) return;
-
-      const rect = stepSliderContainer.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const deltaX = mouseX - stepDragStartMouseX;
-      const trackWidth = rect.width - THUMB_R * 2;
-      const deltaValue = (deltaX / trackWidth) * (STEP_MAX - STEP_MIN);
-
-      const newVal = Math.max(STEP_MIN, Math.min(STEP_MAX, Math.round((stepDragStartVal + deltaValue) / STEP_MIN) * STEP_MIN));
-      if (newVal !== stepCurrentVal) {
-        stepCurrentVal = newVal;
-        updateStepVisual();
-        syncRangeToStep();
-      }
-    };
-
-    const handleStepMouseUp = (e) => {
-      if (!isStepDragging) return;
-      isStepDragging = false;
-
-      stepThumb.style.transform = "translate(-50%, -50%) scale(1)";
-      stepSliderContainer.style.cursor = "pointer";
-      updateStepHover(e);
-    };
-
-    const updateStepHover = (e) => {
-      if (isStepDragging) return;
-
-      const rect = stepSliderContainer.getBoundingClientRect();
-      const mouseX = e.clientX - rect.left;
-      const thumbX = stepValueToThumbX(stepCurrentVal, rect);
-
-      if (Math.abs(mouseX - thumbX) <= 20) {
-        stepSliderContainer.style.cursor = "grab";
-        stepThumb.style.outline = `2px solid ${theme.text}`;
-      } else {
-        stepSliderContainer.style.cursor = "pointer";
-        stepThumb.style.outline = "none";
-      }
-    };
-
-    stepSliderContainer.addEventListener("mousedown", stepMouseDown);
-    document.addEventListener("mousemove", stepMouseMove);
-    document.addEventListener("mouseup", handleStepMouseUp);
-    stepSliderContainer.addEventListener("mousemove", updateStepHover);
-    stepSliderContainer.addEventListener("mouseenter", updateStepHover);
-    stepSliderContainer.addEventListener("mouseleave", () => {
-      if (!isStepDragging) {
-        stepThumb.style.outline = "none";
-        stepSliderContainer.style.cursor = "pointer";
-      }
-    });
-
-    stepSection.appendChild(stepRow);
-
-    // 初始化显示
-    updateStepVisual();
-
-    dialog.appendChild(stepSection);
-
-    // ========== 按钮容器 ==========
-    const buttonContainer = custom.dialogButtonBar();
-
-    // 取消按钮
-    const cancelBtn = custom.dialogButton("Cancel", theme);
-    custom.buttonHover(cancelBtn, theme, 0.3);
-    cancelBtn.addEventListener("click", () => {
-      document.removeEventListener("mouseup", handleSliderMouseUp);
-      document.removeEventListener("mousemove", rangeMouseMove);
-      document.removeEventListener("mouseup", handleStepMouseUp);
-      document.removeEventListener("mousemove", stepMouseMove);
-      document.body.removeChild(overlay);
-      adapter.destroy();
-      resolve(null)
-    });
-
-    // 确认按钮
-    const confirmBtn = custom.dialogButton("Apply", theme);
-    custom.buttonHover(confirmBtn, theme, 0.3);
-    confirmBtn.addEventListener("click", () => {
-      const minVal = rangeMinVal;
-      const maxVal = rangeMaxVal;
-      const stepVal = stepCurrentVal;
+    // 状态管理对象 - 完全按照原始逻辑重构
+    const state = {
+      // Range 状态
+      rangeMinVal: currentMin,
+      rangeMaxVal: currentMax,
+      isDragging: false,
+      dragTarget: null,
       
-      document.removeEventListener("mouseup", handleSliderMouseUp);
-      document.removeEventListener("mousemove", rangeMouseMove);
-      document.removeEventListener("mouseup", handleStepMouseUp);
-      document.removeEventListener("mousemove", stepMouseMove);
-      document.body.removeChild(overlay);
-      adapter.destroy();
-      resolve({ min: minVal, max: maxVal, step: stepVal });
-    });
-
-    buttonContainer.appendChild(cancelBtn);
-    buttonContainer.appendChild(confirmBtn);
-    dialog.appendChild(buttonContainer);
-
-    // 绑定剩余的主题响应元素
-    adapter.bindElement(rangeLabel, { color: "text" });
-    adapter.bindElement(stepLabel, { color: "text" });
-    adapter.bindElement(rangeControlWrapper, { background: "background" });
-    adapter.bindElement(stepControlWrapper, { background: "background" });
-    adapter.bindElement(cancelBtn, { background: "background", color: "text" });
-    adapter.bindElement(confirmBtn, { background: "background", color: "text" });
-
-    overlay.appendChild(dialog);
-    document.body.appendChild(overlay);
-
-    // 初始化显示
-    updateRangeVisual();
-
-    // 点击遮罩层关闭
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) {
-        document.removeEventListener("mouseup", handleSliderMouseUp);
-        document.removeEventListener("mousemove", rangeMouseMove);
-        document.removeEventListener("mouseup", handleStepMouseUp);
-        document.removeEventListener("mousemove", stepMouseMove);
-        document.body.removeChild(overlay);
-        adapter.destroy();
-        resolve(null);
-      }
-    });
-
-    // ESC键关闭
-    const handleEsc = (e) => {
-      if (e.key === "Escape") {
-        document.removeEventListener("mouseup", handleSliderMouseUp);
-        document.removeEventListener("mousemove", rangeMouseMove);
-        document.removeEventListener("mouseup", handleStepMouseUp);
-        document.removeEventListener("mousemove", stepMouseMove);
-        document.body.removeChild(overlay);
-        adapter.destroy();
-        resolve(null);
-        document.removeEventListener("keydown", handleEsc);
-      }
+      // Step 状态
+      stepCurrentVal: currentStep,
+      isStepDragging: false,
+      stepDragStartMouseX: 0,
+      stepDragStartVal: 0,
+      peakStepVal: currentStep,
+      
+      // 拖拽起始状态
+      dragStartMouseX: 0,
+      dragStartMinVal: currentMin,
+      dragStartMaxVal: currentMax,
+      
+      // 常量
+      MAX_RANGE: 4096,
+      MIN_RANGE: 128,
+      STEP_MIN: 128,
+      STEP_MAX: 1024,
+      THUMB_R: 8
     };
-    document.addEventListener("keydown", handleEsc);
 
-    // 聚焦确认按钮
-    setTimeout(() => confirmBtn.focus(), 100);
+    // 用于存储更新函数的引用，实现跨 section 通信
+    const updaters = {
+      rangeUpdateVisual: null,
+      stepUpdateVisual: null
+    };
+
+    const cleanupFns = [];
+
+    // 创建内容容器
+    const content = document.createElement("div");
+    content.style.cssText = "display: flex; flex-direction: column; gap: 16px; width: 100%;";
+
+    // Range Section - 传入 updaters 以便注册更新函数
+    const rangeSection = createRangeSection(theme, state, adapter, cleanupFns, updaters);
+    content.appendChild(rangeSection);
+
+    // Step Section - 传入 updaters 和 range 的更新函数
+    const stepSection = createStepSection(theme, state, adapter, cleanupFns, updaters);
+    content.appendChild(stepSection);
+
+    // 构建对话框
+    const builder = new DialogBuilder(DIALOG_TYPE.FORM)
+      .setTitle("Canvas Setting")
+      .setContent(content)
+      .setCloseOnOverlayClick(true)
+      .setCloseOnEsc(true)
+      .setCloseButton(false)
+      .addButton("Cancel", "secondary", () => {
+        cleanupFns.forEach(fn => fn());
+        return null;
+      })
+      .addButton("Apply", "secondary", () => {
+        cleanupFns.forEach(fn => fn());
+        return { 
+          min: state.rangeMinVal, 
+          max: state.rangeMaxVal, 
+          step: state.stepCurrentVal 
+        };
+      }, { autoFocus: true });
+    
+    builder.open().then(resolve);
   });
-};
+}
+
+// ========== Range Section ==========
+
+function createRangeSection(theme, state, adapter, cleanupFns, updaters) {
+  const section = document.createElement("div");
+  section.style.marginBottom = "8px";
+
+  const row = custom.container(theme);
+  const label = custom.sectionLabel("range", theme);
+  row.appendChild(label);
+
+  const controlWrapper = custom.controlWrapper(theme);
+  row.appendChild(controlWrapper);
+
+  const minDisplay = custom.valueDisplay(state.rangeMinVal, theme, "left");
+  minDisplay.style.paddingLeft = "6px";
+  controlWrapper.appendChild(minDisplay);
+
+  const sliderContainer = custom.sliderContainer();
+  controlWrapper.appendChild(sliderContainer);
+
+  const track = custom.sliderTrack(theme);
+  sliderContainer.appendChild(track);
+
+  const activeTrack = custom.activeTrack(theme);
+  sliderContainer.appendChild(activeTrack);
+
+  const minSlider = custom.hiddenSlider({
+    min: state.stepCurrentVal,
+    max: state.MAX_RANGE,
+    step: state.stepCurrentVal,
+    value: state.rangeMinVal
+  }, { zIndex: "4" });
+  
+  const maxSlider = custom.hiddenSlider({
+    min: state.stepCurrentVal,
+    max: state.MAX_RANGE,
+    step: state.stepCurrentVal,
+    value: state.rangeMaxVal
+  }, { zIndex: "5" });
+
+  const minThumb = custom.sliderThumb(theme);
+  const maxThumb = custom.sliderThumb(theme);
+
+  sliderContainer.appendChild(minThumb);
+  sliderContainer.appendChild(maxThumb);
+  sliderContainer.appendChild(minSlider);
+  sliderContainer.appendChild(maxSlider);
+
+  const maxDisplay = custom.valueDisplay(state.rangeMaxVal, theme, "right");
+  maxDisplay.style.paddingRight = "6px";
+  controlWrapper.appendChild(maxDisplay);
+
+  // 工具函数
+  const snapToStep = (val, stepVal, snapToMax) => {
+    const snapped = Math.round(val / stepVal) * stepVal;
+    if (snapToMax && snapped > state.MAX_RANGE - stepVal) return state.MAX_RANGE;
+    return Math.max(stepVal, Math.min(state.MAX_RANGE, snapped));
+  };
+
+  const pxToValue = (mouseX, rect) => {
+    const trackWidth = rect.width - state.THUMB_R * 2;
+    const x = mouseX - state.THUMB_R;
+    const ratio = Math.max(0, Math.min(1, x / trackWidth));
+    return state.MIN_RANGE + ratio * (state.MAX_RANGE - state.MIN_RANGE);
+  };
+
+  const valueToThumbX = (val, rect) => {
+    return state.THUMB_R + ((val - state.MIN_RANGE) / (state.MAX_RANGE - state.MIN_RANGE)) * (rect.width - state.THUMB_R * 2);
+  };
+
+  const getStepVal = () => state.stepCurrentVal;
+
+  // 视觉更新函数 - 注册到 updaters 供外部调用
+  const updateVisual = () => {
+    minSlider.value = state.rangeMinVal;
+    maxSlider.value = state.rangeMaxVal;
+    minDisplay.textContent = state.rangeMinVal;
+    maxDisplay.textContent = state.rangeMaxVal;
+
+    const minPercent = ((state.rangeMinVal - state.MIN_RANGE) / (state.MAX_RANGE - state.MIN_RANGE)) * 100;
+    const maxPercent = ((state.rangeMaxVal - state.MIN_RANGE) / (state.MAX_RANGE - state.MIN_RANGE)) * 100;
+
+    activeTrack.style.left = `calc(${state.THUMB_R}px + (100% - ${state.THUMB_R * 2}px) * ${minPercent / 100})`;
+    activeTrack.style.right = `calc(${state.THUMB_R}px + (100% - ${state.THUMB_R * 2}px) * ${(100 - maxPercent) / 100})`;
+
+    minThumb.style.left = `calc(${state.THUMB_R}px + (100% - ${state.THUMB_R * 2}px) * ${minPercent / 100})`;
+    maxThumb.style.left = `calc(${state.THUMB_R}px + (100% - ${state.THUMB_R * 2}px) * ${maxPercent / 100})`;
+  };
+
+  // 注册更新函数到 updaters 对象
+  updaters.rangeUpdateVisual = updateVisual;
+
+  // 事件处理函数
+  const rangeMouseDown = (e) => {
+    state.peakStepVal = state.stepCurrentVal;
+
+    const rect = sliderContainer.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const stepVal = getStepVal();
+
+    const minThumbX = valueToThumbX(state.rangeMinVal, rect);
+    const maxThumbX = valueToThumbX(state.rangeMaxVal, rect);
+
+    const nearMin = Math.abs(mouseX - minThumbX) <= state.THUMB_R + 4;
+    const nearMax = Math.abs(mouseX - maxThumbX) <= state.THUMB_R + 4;
+
+    if (nearMin || nearMax) {
+      if (nearMin && nearMax) {
+        state.dragTarget = (mouseX - minThumbX < maxThumbX - mouseX) ? "min" : "max";
+      } else {
+        state.dragTarget = nearMin ? "min" : "max";
+      }
+    } else {
+      const clickVal = pxToValue(mouseX, rect);
+      const midPoint = (state.rangeMinVal + state.rangeMaxVal) / 2;
+
+      if (clickVal < midPoint) {
+        state.dragTarget = "min";
+        const direction = clickVal < state.rangeMinVal ? -1 : 1;
+        state.rangeMinVal = snapToStep(state.rangeMinVal + direction * stepVal, stepVal, false);
+        if (state.rangeMinVal >= state.rangeMaxVal) {
+          state.rangeMaxVal = state.rangeMinVal + stepVal;
+          if (state.rangeMaxVal > state.MAX_RANGE) {
+            state.rangeMaxVal = state.MAX_RANGE;
+            state.rangeMinVal = state.rangeMaxVal - stepVal;
+          }
+        }
+      } else {
+        state.dragTarget = "max";
+        const direction = clickVal < state.rangeMaxVal ? -1 : 1;
+        state.rangeMaxVal = snapToStep(state.rangeMaxVal + direction * stepVal, stepVal, true);
+        if (state.rangeMaxVal <= state.rangeMinVal) {
+          state.rangeMinVal = state.rangeMaxVal - stepVal;
+          if (state.rangeMinVal < stepVal) {
+            state.rangeMinVal = stepVal;
+            state.rangeMaxVal = state.rangeMinVal + stepVal;
+          }
+        }
+      }
+      updateVisual();
+    }
+
+    state.isDragging = true;
+    state.dragStartMouseX = mouseX;
+    state.dragStartMinVal = state.rangeMinVal;
+    state.dragStartMaxVal = state.rangeMaxVal;
+
+    const activeThumb = state.dragTarget === "min" ? minThumb : maxThumb;
+    activeThumb.style.transform = "translate(-50%, -50%) scale(1.2)";
+    activeThumb.style.outline = `2px solid ${theme.text}`;
+    sliderContainer.style.cursor = "grabbing";
+
+    e.preventDefault();
+  };
+
+  const rangeMouseMove = (e) => {
+    if (!state.isDragging || !state.dragTarget) return;
+
+    const rect = sliderContainer.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const stepVal = getStepVal();
+    const deltaX = mouseX - state.dragStartMouseX;
+    const trackWidth = rect.width - state.THUMB_R * 2;
+    const deltaValue = (deltaX / trackWidth) * (state.MAX_RANGE - state.MIN_RANGE);
+
+    if (state.dragTarget === "min") {
+      let newMin = snapToStep(state.dragStartMinVal + deltaValue, stepVal, false);
+      newMin = Math.max(stepVal, newMin);
+
+      if (newMin + stepVal > state.rangeMaxVal) {
+        state.rangeMaxVal = newMin + stepVal;
+        if (state.rangeMaxVal > state.MAX_RANGE) {
+          state.rangeMaxVal = state.MAX_RANGE;
+          newMin = state.rangeMaxVal - stepVal;
+        }
+      }
+      state.rangeMinVal = newMin;
+    } else {
+      let newMax = snapToStep(state.dragStartMaxVal + deltaValue, stepVal, true);
+      newMax = Math.min(state.MAX_RANGE, newMax);
+      if (newMax < stepVal * 2) newMax = stepVal * 2;
+
+      if (newMax - stepVal < state.rangeMinVal) {
+        state.rangeMinVal = newMax - stepVal;
+        if (state.rangeMinVal < stepVal) {
+          state.rangeMinVal = stepVal;
+          newMax = state.rangeMinVal + stepVal;
+        }
+      }
+      state.rangeMaxVal = newMax;
+    }
+
+    updateVisual();
+  };
+
+  const rangeMouseUp = (e) => {
+    if (!state.isDragging) return;
+    state.isDragging = false;
+
+    minThumb.style.transform = "translate(-50%, -50%) scale(1)";
+    maxThumb.style.transform = "translate(-50%, -50%) scale(1)";
+    sliderContainer.style.cursor = "pointer";
+
+    updateRangeHover(e);
+    state.dragTarget = null;
+  };
+
+  const updateRangeHover = (e) => {
+    if (state.isDragging) return;
+
+    const rect = sliderContainer.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const minThumbX = valueToThumbX(state.rangeMinVal, rect);
+    const maxThumbX = valueToThumbX(state.rangeMaxVal, rect);
+
+    const nearMin = Math.abs(mouseX - minThumbX) <= 20;
+    const nearMax = Math.abs(mouseX - maxThumbX) <= 20;
+
+    if (nearMin || nearMax) {
+      sliderContainer.style.cursor = "grab";
+      if (nearMin) minThumb.style.outline = `2px solid ${theme.text}`;
+      else minThumb.style.outline = "none";
+      if (nearMax) maxThumb.style.outline = `2px solid ${theme.text}`;
+      else maxThumb.style.outline = "none";
+    } else {
+      sliderContainer.style.cursor = "pointer";
+      minThumb.style.outline = "none";
+      maxThumb.style.outline = "none";
+    }
+  };
+
+  // 绑定事件
+  sliderContainer.addEventListener("mousedown", rangeMouseDown);
+  document.addEventListener("mousemove", rangeMouseMove);
+  document.addEventListener("mouseup", rangeMouseUp);
+  sliderContainer.addEventListener("mousemove", updateRangeHover);
+  sliderContainer.addEventListener("mouseenter", updateRangeHover);
+  
+  const mouseLeaveHandler = () => {
+    if (!state.isDragging) {
+      minThumb.style.outline = "none";
+      maxThumb.style.outline = "none";
+      sliderContainer.style.cursor = "pointer";
+    }
+  };
+  sliderContainer.addEventListener("mouseleave", mouseLeaveHandler);
+
+  // 注册清理函数
+  cleanupFns.push(() => {
+    sliderContainer.removeEventListener("mousedown", rangeMouseDown);
+    document.removeEventListener("mousemove", rangeMouseMove);
+    document.removeEventListener("mouseup", rangeMouseUp);
+    sliderContainer.removeEventListener("mousemove", updateRangeHover);
+    sliderContainer.removeEventListener("mouseenter", updateRangeHover);
+    sliderContainer.removeEventListener("mouseleave", mouseLeaveHandler);
+  });
+
+  // 禁用原生 slider 交互
+  minSlider.style.pointerEvents = "none";
+  maxSlider.style.pointerEvents = "none";
+
+  updateVisual();
+  section.appendChild(row);
+  return section;
+}
+
+// ========== Step Section ==========
+
+function createStepSection(theme, state, adapter, cleanupFns, updaters) {
+  const section = document.createElement("div");
+  section.style.marginBottom = "8px";
+
+  const row = custom.container(theme);
+  const label = custom.sectionLabel("step", theme);
+  row.appendChild(label);
+
+  const controlWrapper = custom.controlWrapper(theme);
+  row.appendChild(controlWrapper);
+
+  const minDisplay = custom.valueDisplay("128", theme, "left");
+  minDisplay.style.paddingLeft = "6px";
+  controlWrapper.appendChild(minDisplay);
+
+  const sliderContainer = custom.sliderContainer();
+  controlWrapper.appendChild(sliderContainer);
+
+  const track = custom.sliderTrack(theme);
+  sliderContainer.appendChild(track);
+
+  const activeTrack = custom.activeTrack(theme, { left: "0" });
+  sliderContainer.appendChild(activeTrack);
+
+  const stepSlider = custom.hiddenSlider({ 
+    min: 128, 
+    max: 1024, 
+    step: 128, 
+    value: state.stepCurrentVal 
+  });
+  
+  const stepThumb = custom.sliderThumb(theme, { zIndex: "6" });
+
+  sliderContainer.appendChild(stepThumb);
+  sliderContainer.appendChild(stepSlider);
+
+  const valueDisplay = custom.valueDisplay(state.stepCurrentVal, theme, "right");
+  valueDisplay.style.paddingRight = "6px";
+  controlWrapper.appendChild(valueDisplay);
+
+  // 视觉更新函数 - 注册到 updaters
+  const updateVisual = () => {
+    stepSlider.value = state.stepCurrentVal;
+    valueDisplay.textContent = state.stepCurrentVal;
+
+    const stepPercent = ((state.stepCurrentVal - state.STEP_MIN) / (state.STEP_MAX - state.STEP_MIN)) * 100;
+    activeTrack.style.right = `calc(${state.THUMB_R}px + (100% - ${state.THUMB_R * 2}px) * ${(100 - stepPercent) / 100})`;
+    stepThumb.style.left = `calc(${state.THUMB_R}px + (100% - ${state.THUMB_R * 2}px) * ${stepPercent / 100})`;
+  };
+
+  updaters.stepUpdateVisual = updateVisual;
+
+  // 同步 range 到 step - 关键修复：同步后调用 range 的更新函数
+  const syncRangeToStep = () => {
+    const stepVal = state.stepCurrentVal;
+
+    if (stepVal <= state.peakStepVal) {
+      return;
+    }
+    state.peakStepVal = stepVal;
+
+    if (stepVal <= state.rangeMinVal) {
+      return;
+    }
+
+    const snapToStep = (val, step, snapToMax) => {
+      const snapped = Math.round(val / step) * step;
+      if (snapToMax && snapped > state.MAX_RANGE - step) return state.MAX_RANGE;
+      return Math.max(step, Math.min(state.MAX_RANGE, snapped));
+    };
+
+    if (stepVal > state.rangeMinVal) {
+      state.rangeMinVal = snapToStep(state.rangeMinVal, stepVal, false);
+    }
+    
+    if (stepVal > state.rangeMaxVal) {
+      state.rangeMaxVal = snapToStep(state.rangeMaxVal, stepVal, true);
+    }
+
+    if (state.rangeMaxVal - state.rangeMinVal < stepVal) {
+      state.rangeMaxVal = state.rangeMinVal + stepVal;
+      if (state.rangeMaxVal > state.MAX_RANGE) {
+        state.rangeMaxVal = state.MAX_RANGE;
+        state.rangeMinVal = state.rangeMaxVal - stepVal;
+      }
+    }
+
+    // 关键修复：触发 range section 的视觉更新
+    if (updaters.rangeUpdateVisual) {
+      updaters.rangeUpdateVisual();
+    }
+  };
+
+  // 工具函数
+  const stepPxToValue = (mouseX, rect) => {
+    const trackWidth = rect.width - state.THUMB_R * 2;
+    const x = mouseX - state.THUMB_R;
+    const ratio = Math.max(0, Math.min(1, x / trackWidth));
+    const raw = state.STEP_MIN + ratio * (state.STEP_MAX - state.STEP_MIN);
+    return Math.max(state.STEP_MIN, Math.min(state.STEP_MAX, Math.round(raw / state.STEP_MIN) * state.STEP_MIN));
+  };
+
+  const stepValueToThumbX = (val, rect) => {
+    return state.THUMB_R + ((val - state.STEP_MIN) / (state.STEP_MAX - state.STEP_MIN)) * (rect.width - state.THUMB_R * 2);
+  };
+
+  // 事件处理函数
+  const stepMouseDown = (e) => {
+    const rect = sliderContainer.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const thumbX = stepValueToThumbX(state.stepCurrentVal, rect);
+    const nearThumb = Math.abs(mouseX - thumbX) <= state.THUMB_R + 4;
+
+    if (!nearThumb) {
+      const direction = mouseX > thumbX ? 1 : -1;
+      state.stepCurrentVal = Math.max(state.STEP_MIN, Math.min(state.STEP_MAX, state.stepCurrentVal + direction * state.STEP_MIN));
+      updateVisual();
+      syncRangeToStep(); // 这会触发 range 更新
+    }
+
+    state.isStepDragging = true;
+    state.stepDragStartMouseX = mouseX;
+    state.stepDragStartVal = state.stepCurrentVal;
+
+    stepThumb.style.transform = "translate(-50%, -50%) scale(1.2)";
+    stepThumb.style.outline = `2px solid ${theme.text}`;
+    sliderContainer.style.cursor = "grabbing";
+    e.preventDefault();
+  };
+
+  const stepMouseMove = (e) => {
+    if (!state.isStepDragging) return;
+
+    const rect = sliderContainer.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const deltaX = mouseX - state.stepDragStartMouseX;
+    const trackWidth = rect.width - state.THUMB_R * 2;
+    const deltaValue = (deltaX / trackWidth) * (state.STEP_MAX - state.STEP_MIN);
+
+    const newVal = Math.max(state.STEP_MIN, Math.min(state.STEP_MAX, Math.round((state.stepDragStartVal + deltaValue) / state.STEP_MIN) * state.STEP_MIN));
+    if (newVal !== state.stepCurrentVal) {
+      state.stepCurrentVal = newVal;
+      updateVisual();
+      syncRangeToStep(); // 这会触发 range 更新
+    }
+  };
+
+  const stepMouseUp = (e) => {
+    if (!state.isStepDragging) return;
+    state.isStepDragging = false;
+
+    stepThumb.style.transform = "translate(-50%, -50%) scale(1)";
+    sliderContainer.style.cursor = "pointer";
+    updateStepHover(e);
+  };
+
+  const updateStepHover = (e) => {
+    if (state.isStepDragging) return;
+
+    const rect = sliderContainer.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const thumbX = stepValueToThumbX(state.stepCurrentVal, rect);
+
+    if (Math.abs(mouseX - thumbX) <= 20) {
+      sliderContainer.style.cursor = "grab";
+      stepThumb.style.outline = `2px solid ${theme.text}`;
+    } else {
+      sliderContainer.style.cursor = "pointer";
+      stepThumb.style.outline = "none";
+    }
+  };
+
+  // 绑定事件
+  sliderContainer.addEventListener("mousedown", stepMouseDown);
+  document.addEventListener("mousemove", stepMouseMove);
+  document.addEventListener("mouseup", stepMouseUp);
+  sliderContainer.addEventListener("mousemove", updateStepHover);
+  sliderContainer.addEventListener("mouseenter", updateStepHover);
+  
+  const mouseLeaveHandler = () => {
+    if (!state.isStepDragging) {
+      stepThumb.style.outline = "none";
+      sliderContainer.style.cursor = "pointer";
+    }
+  };
+  sliderContainer.addEventListener("mouseleave", mouseLeaveHandler);
+
+  // 注册清理函数
+  cleanupFns.push(() => {
+    sliderContainer.removeEventListener("mousedown", stepMouseDown);
+    document.removeEventListener("mousemove", stepMouseMove);
+    document.removeEventListener("mouseup", stepMouseUp);
+    sliderContainer.removeEventListener("mousemove", updateStepHover);
+    sliderContainer.removeEventListener("mouseenter", updateStepHover);
+    sliderContainer.removeEventListener("mouseleave", mouseLeaveHandler);
+  });
+
+  updateVisual();
+  section.appendChild(row);
+  return section;
+}
 
 // ========== 辅助函数 ==========
 
@@ -707,7 +600,7 @@ function saveWidgetRange(node) {
       };
     }
   });
-};
+}
 
 function restoreWidgetRange(node) {
   const range = node.properties?.widgetRange;
@@ -723,7 +616,7 @@ function restoreWidgetRange(node) {
       if (r.step2 !== undefined) w.options.step2 = r.step2;
     }
   });
-};
+}
 
 function forceRefresh(node) {
   node.setDirtyCanvas(true, true);
@@ -732,7 +625,7 @@ function forceRefresh(node) {
   const origSize = node.size;
   node.setSize([origSize[0], origSize[1]]);
   node.graph?.change?.();
-};
+}
 
 function forceUpdateWidgetValue(widget, newValue) {
   const currentValue = widget.value;
@@ -743,7 +636,7 @@ function forceUpdateWidgetValue(widget, newValue) {
   if (widget.callback) {
     widget.callback(newValue);
   }
-};
+}
 
 // ========== 画布 Widget ==========
 
@@ -751,79 +644,50 @@ function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeight) {
   const adapter = new ComfyThemeAdapter();
   let theme = adapter.theme;
 
-  /**
-   * 容器 
-   */
   const container = custom.canvas2dContainer();
-
-  /** 
-  * 部件主体
-  */
   const sliderBox = custom.sliderBox(theme);
   container.appendChild(sliderBox);
 
-  /** 
-   * 网格背景（按step动态生成）
-  */
   const grid = custom.canvasGrid(theme);
   sliderBox.appendChild(grid);
 
-  /** 
-  * 最小值区域
-  */
   const minZone = custom.canvasZone(theme, 0.6, "1");
   sliderBox.appendChild(minZone);
 
-  /**
-   * 选中区域
-  */
   const selectedArea = custom.canvasSelectedArea(theme);
   sliderBox.appendChild(selectedArea);
 
-  /** 
-  * 水平辅助线
-   */
   const lineH = custom.guideLineH();
-  
-  // 水平线的可视部分
   const lineHVisual = custom.guideLineHVisual(theme);
   lineH.appendChild(lineHVisual);
   sliderBox.appendChild(lineH);
 
-  /** 
-  * 垂直辅助线
-   */
   const lineV = custom.guideLineV();
-  
-  // 垂直线的可视部分
   const lineVVisual = custom.guideLineVVisual(theme);
   lineV.appendChild(lineVVisual);
   sliderBox.appendChild(lineV);
 
-  /** 
-  * 点位指示器
-   */
   const point = custom.guidePoint(theme);
   sliderBox.appendChild(point);
   
-  /** 
-  * 坐标提示
-   */
   const coordTooltip = custom.coordTooltip(theme);
   document.body.appendChild(coordTooltip);
 
-  // 更新显示函数
   function updateDisplay() {
     const minW = widgetWidth.options?.min ?? 64;
     const maxW = widgetWidth.options?.max ?? 4096;
     const minH = widgetHeight.options?.min ?? 64;
     const maxH = widgetHeight.options?.max ?? 4096;
-    // 网格绘制始终使用用户步长，不使用临时步长
-    const gridStepW = isPresetTemporaryStep ? userStepW : (widgetWidth.options?.step ?? 64);
-    const gridStepH = isPresetTemporaryStep ? userStepH : (widgetHeight.options?.step ?? 64);
     
-    // 调试：检查网格步长
-    // console.log('Grid step:', gridStepW, gridStepH, 'isPreset:', isPresetTemporaryStep, 'userStep:', userStepW, userStepH);
+    let gridStepW = isPresetTemporaryStep ? userStepW : (widgetWidth.options?.step ?? 64);
+    let gridStepH = isPresetTemporaryStep ? userStepH : (widgetHeight.options?.step ?? 64);
+
+    if (!gridStepW || gridStepW <= 0) gridStepW = 64;
+    if (!gridStepH || gridStepH <= 0) gridStepH = 64;
+
+    const maxGridLines = 20;
+    while (maxW / gridStepW > maxGridLines && gridStepW < maxW) { gridStepW *= 2 }
+    while (maxH / gridStepH > maxGridLines && gridStepH < maxH) { gridStepH *= 2 }
 
     const w = widgetWidth.value;
     const h = widgetHeight.value;
@@ -846,24 +710,19 @@ function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeight) {
     lineH.style.bottom = `${yPercent}%`;
     lineV.style.left = `${xPercent}%`;
 
-    // 动态生成基于原始step的网格，确保网格始终可见
-    // 网格应该覆盖整个范围，每个格子对应一个步长
-    const gridCountX = Math.floor(maxW / gridStepW);
-    const gridCountY = Math.floor(maxH / gridStepH);
-    // 每个网格的大小（百分比）
     const gridSizeXPercent = (gridStepW / maxW) * 100;
     const gridSizeYPercent = (gridStepH / maxH) * 100;
 
+    const gridColor = theme.secondary;
+
     grid.style.backgroundImage = `
-      linear-gradient(${theme.secondary} 1px, transparent 1px),
-      linear-gradient(90deg, ${theme.secondary} 1px, transparent 1px)
+      linear-gradient(to right, ${gridColor} 1px, transparent 1px),
+      linear-gradient(to bottom, ${gridColor} 1px, transparent 1px)
     `;
-    grid.style.backgroundSize = `${gridSizeXPercent}% ${gridSizeYPercent}%`;
-    // 确保网格从左下角开始对齐
+    grid.style.backgroundSize = `${Math.max(gridSizeXPercent, 5)}% ${Math.max(gridSizeYPercent, 5)}%`;
     grid.style.backgroundPosition = '0% 100%';
   }
 
-  // 检查是否需要切换到Custom
   function checkAndSetCustom(newW, newH) {
     const currentPreset = widgetPreset.value;
     if (currentPreset === "Custom") return;
@@ -876,7 +735,6 @@ function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeight) {
     }
   }
   
-  // 更新坐标提示
   function updateCoordTooltip(e, mode = null) {
     const rect = sliderBox.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
@@ -888,7 +746,7 @@ function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeight) {
     const maxW = widgetWidth.options?.max ?? 4096;
     const minH = widgetHeight.options?.min ?? 64;
     const maxH = widgetHeight.options?.max ?? 4096;
-    // 坐标提示始终使用用户设置的步长，不受预设临时步长影响
+    
     const stepW = userStepW ?? widgetWidth.options?.step2 ?? widgetWidth.options?.step ?? 64;
     const stepH = userStepH ?? widgetHeight.options?.step2 ?? widgetHeight.options?.step ?? 64;
 
@@ -897,27 +755,16 @@ function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeight) {
     w = Math.round(w / stepW) * stepW;
     h = Math.round(h / stepH) * stepH;
     
-    // 计算最小限制区域的边界
     const minXPercent = minW / maxW;
     const minYPercent = minH / maxH;
     
-    // 根据拖拽模式调整显示逻辑
     if (mode === 'lineV') {
-      // 垂直辅助线，只更新宽度
-      if (x <= minXPercent) {
-        w = minW;
-      }
-      // 高度显示当前值
+      if (x <= minXPercent) w = minW;
       h = widgetHeight.value;
     } else if (mode === 'lineH') {
-      // 水平辅助线，只更新高度
-      if (y <= minYPercent) {
-        h = minH;
-      }
-      // 宽度显示当前值
+      if (y <= minYPercent) h = minH;
       w = widgetWidth.value;
     } else {
-      // 点位指示器或普通移动，同时更新两个维度
       if (x <= minXPercent && y <= minYPercent) {
         w = minW;
         h = minH;
@@ -928,7 +775,6 @@ function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeight) {
       }
     }
 
-    // 根据拖拽模式设置文本颜色
     let wColor = theme.text;
     let hColor = theme.text;
     let commaColor = theme.text;
@@ -936,19 +782,14 @@ function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeight) {
     let hFontSize = "12px";
     
     if (mode === 'lineH') {
-      // 拖拽水平辅助线时，W 不变，颜色变化
       wColor = theme.background;
       commaColor = theme.background;
-      // H在变化，字号增加
       hFontSize = "13px";
     } else if (mode === 'lineV') {
-      // 拖拽垂直辅助线时，H 不变，颜色变化
       hColor = theme.background;
       commaColor = theme.background;
-      // W在变化，字号增加
       wFontSize = "13px";
     } else if (mode === 'point') {
-      // 拖拽点位指示器时，W和H都在变化，字号都增加
       wFontSize = "13px";
       hFontSize = "13px";
     }
@@ -959,20 +800,15 @@ function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeight) {
     coordTooltip.style.top = `${e.clientY + 15}px`;
   }
 
-  // ========== 交互状态 ==========
   let isDragging = false;
   let isProgrammaticUpdate = false;
-  let dragMode = null; // null, 'point', 'lineH', 'lineV'
-  
-  // 用于标识当前拖拽的滑块实体
+  let dragMode = null;
   let currentSliderBox = null;
   
-  // 保存真正的用户步长（不是临时步长）
   let userStepW = widgetWidth.options?.step2 ?? widgetWidth.options?.step ?? 64;
   let userStepH = widgetHeight.options?.step2 ?? widgetHeight.options?.step ?? 64;
-  let isPresetTemporaryStep = false; // 标记是否使用临时步长（预设选择时）
+  let isPresetTemporaryStep = false;
 
-  // 恢复原始步长（从预设临时步长恢复）
   function restoreOriginalStep() {
     if (isPresetTemporaryStep) {
       widgetWidth.options.step = userStepW;
@@ -983,7 +819,6 @@ function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeight) {
     }
   }
 
-  // 计算并应用新的尺寸
   function applyInteraction(e, mode = null) {
     const rect = sliderBox.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
@@ -1001,19 +836,15 @@ function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeight) {
     let newW = widgetWidth.value;
     let newH = widgetHeight.value;
 
-    // 根据拖拽模式决定更新哪个维度
     if (mode === 'lineV') {
-      // 只更新宽度
       newW = x * maxW;
       newW = Math.round(newW / stepW) * stepW;
       newW = Math.max(minW, Math.min(maxW, newW));
     } else if (mode === 'lineH') {
-      // 只更新高度
       newH = y * maxH;
       newH = Math.round(newH / stepH) * stepH;
       newH = Math.max(minH, Math.min(maxH, newH));
     } else {
-      // 同时更新宽度和高度（点位指示器或普通点击）
       newW = x * maxW;
       newH = y * maxH;
       newW = Math.round(newW / stepW) * stepW;
@@ -1032,7 +863,6 @@ function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeight) {
     updateDisplay();
   }
   
-  // 主题适配：绑定需要跟随主题变化的元素
   adapter.bindElement(sliderBox, { background: "background" });
   adapter.bindElement(grid, {
     boxShadow: (t) => `inset 0 0 0 1px ${t.background}`
@@ -1047,10 +877,10 @@ function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeight) {
   });
   adapter.bindElement(selectedArea, { background: ["border", 0.5] });
   adapter.bindElement(minZone, { background: ["primary", 0.6] });
+  
   adapter.onThemeChange((newTheme) => {
     theme = newTheme;
     updateDisplay();
-    // 条件更新：仅在已显示 outline 时同步颜色
     if (point.style.outlineWidth && point.style.outlineWidth !== "0px") {
       point.style.outlineColor = theme.text;
     }
@@ -1062,207 +892,130 @@ function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeight) {
     }
   });
 
-  // ========== 鼠标事件 ==========
-  
-  // hover 效果 - 点位指示器
   point.addEventListener("mouseenter", () => {
-    if (!isDragging) {
-      point.style.outline = `2px solid ${theme.text}`;
-    }
+    if (!isDragging) point.style.outline = `2px solid ${theme.text}`;
   });
   
   point.addEventListener("mouseleave", () => {
-    if (!isDragging) {
-      point.style.outline = "none";
-    }
+    if (!isDragging) point.style.outline = "none";
   });
   
-  // hover 效果 - 水平辅助线
   lineH.addEventListener("mouseenter", () => {
-    if (!isDragging || dragMode !== 'lineH') {
-      lineHVisual.style.outline = `1px solid ${theme.text}`;
-    }
+    if (!isDragging || dragMode !== 'lineH') lineHVisual.style.outline = `1px solid ${theme.text}`;
   });
   
   lineH.addEventListener("mouseleave", () => {
-    if (!isDragging || dragMode !== 'lineH') {
-      lineHVisual.style.outline = "none";
-    }
+    if (!isDragging || dragMode !== 'lineH') lineHVisual.style.outline = "none";
   });
   
-  // hover 效果 - 垂直辅助线
   lineV.addEventListener("mouseenter", () => {
-    if (!isDragging || dragMode !== 'lineV') {
-      lineVVisual.style.outline = `1px solid ${theme.text}`;
-    }
+    if (!isDragging || dragMode !== 'lineV') lineVVisual.style.outline = `1px solid ${theme.text}`;
   });
   
   lineV.addEventListener("mouseleave", () => {
-    if (!isDragging || dragMode !== 'lineV') {
-      lineVVisual.style.outline = "none";
-    }
+    if (!isDragging || dragMode !== 'lineV') lineVVisual.style.outline = "none";
   });
   
-  // 点位指示器拖拽
   point.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
-    
-    // 恢复原始步长（如果是从预设临时步长状态）
     restoreOriginalStep();
-    
     isDragging = true;
     dragMode = 'point';
     currentSliderBox = sliderBox;
     point.style.cursor = "grabbing";
     point.style.outline = `2px solid ${theme.text}`;
-    
-    // 显示坐标提示
     updateCoordTooltip(e, dragMode);
-    
     applyInteraction(e, dragMode);
-    
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
   });
   
-  // 水平辅助线拖拽
   lineH.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
-    
-    // 恢复原始步长（如果是从预设临时步长状态）
     restoreOriginalStep();
-    
     isDragging = true;
     dragMode = 'lineH';
     currentSliderBox = sliderBox;
     lineHVisual.style.outline = `1px solid ${theme.text}`;
-    // 锁定光标样式，防止闪烁
     document.body.style.cursor = "ns-resize";
-    
-    // 显示坐标提示
     updateCoordTooltip(e, dragMode);
-    
     applyInteraction(e, dragMode);
-    
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
   });
   
-  // 垂直辅助线拖拽
   lineV.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
-    
-    // 恢复原始步长（如果是从预设临时步长状态）
     restoreOriginalStep();
-    
     isDragging = true;
     dragMode = 'lineV';
     currentSliderBox = sliderBox;
     lineVVisual.style.outline = `1px solid ${theme.text}`;
-    // 锁定光标样式，防止闪烁
     document.body.style.cursor = "ew-resize";
-    
-    // 显示坐标提示
     updateCoordTooltip(e, dragMode);
-    
     applyInteraction(e, dragMode);
-    
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
   });
   
-  // mousedown: 开始拖拽（在空白区域点击）
   sliderBox.addEventListener("mousedown", (e) => {
-    // 只处理左键点击
     if (e.button !== 0) return;
-    
-    // 如果点击的是辅助线或点位指示器，不处理
     if (e.target === lineH || e.target === lineV || e.target === point) return;
-    
-    // 恢复原始步长（如果是从预设临时步长状态）
     restoreOriginalStep();
-    
     isDragging = true;
     dragMode = 'point';
     currentSliderBox = sliderBox;
     sliderBox.classList.add("dragging");
-    
-    // 显示坐标提示
     updateCoordTooltip(e, dragMode);
-    
-    // 立即设置点位
     applyInteraction(e, dragMode);
-
-    // 阻止事件传播到canvas
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
   });
 
-  // sliderBox鼠标移动 - 显示坐标提示
   sliderBox.addEventListener("mousemove", (e) => {
-    // 如果正在拖拽，不处理（由 handleMouseMove 处理）
     if (isDragging) return;
     updateCoordTooltip(e, null);
   });
   
-  // sliderBox鼠标离开 - 隐藏坐标提示
   sliderBox.addEventListener("mouseleave", () => {
-    // 如果正在拖拽，不隐藏
     if (isDragging) return;
     coordTooltip.style.display = "none";
   });
   
-  // mousemove: 只在当前 sliderBox 拖拽时更新
   const handleMouseMove = (e) => {
-    // 关键：只有当isDragging为true且是当前sliderBox时才更新
     if (!isDragging || currentSliderBox !== sliderBox) return;
-    
-    // 更新坐标提示
     updateCoordTooltip(e, dragMode);
-    
     applyInteraction(e, dragMode);
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
   };
 
-  // mouseup: 结束拖拽
   const handleMouseUp = (e) => {
     if (!isDragging || currentSliderBox !== sliderBox) return;
-    
-    const lastDragMode = dragMode;
-    
     isDragging = false;
     currentSliderBox = null;
     dragMode = null;
     sliderBox.classList.remove("dragging");
-    
-    // 恢复光标和边框
     point.style.cursor = "grab";
     point.style.outline = "none";
     lineHVisual.style.outline = "none";
     lineVVisual.style.outline = "none";
     document.body.style.cursor = "";
-    
-    // 隐藏坐标提示
     coordTooltip.style.display = "none";
-    
     forceRefresh(node);
-    
     e.preventDefault();
     e.stopPropagation();
     e.stopImmediatePropagation();
   };
 
-  // 使用捕获阶段来确保能够拦截所有相关事件
   document.addEventListener("mousemove", handleMouseMove, true);
   document.addEventListener("mouseup", handleMouseUp, true);
 
-  // 创建 DOM Widget
   const widget = node.addDOMWidget("canvas_2d_slider", "CANVAS_2D_SLIDER", container, {
     serialize: false,
     hideOnZoom: false
@@ -1271,7 +1024,6 @@ function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeight) {
   widget.computeSize = function(width) {
     const nodeWidth = node.size?.[0] ?? 300;
     const nodeHeight = node.size?.[1] ?? 400;
-
     const headerHeight = LiteGraph.NODE_TITLE_HEIGHT ?? 30;
     let otherWidgetsHeight = headerHeight + 15;
 
@@ -1287,7 +1039,6 @@ function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeight) {
     const padding = 30;
     const availableWidth = nodeWidth - padding;
     const availableHeight = nodeHeight - otherWidgetsHeight - 30;
-
     const size = Math.max(100, Math.min(availableWidth, availableHeight, 400));
 
     sliderBox.style.width = `${size}px`;
@@ -1299,23 +1050,17 @@ function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeight) {
   const originalDraw = widget.draw;
   widget.draw = function(ctx, node, width, y, height) {
     updateDisplay();
-    if (originalDraw) {
-      return originalDraw.apply(this, arguments);
-    }
+    if (originalDraw) return originalDraw.apply(this, arguments);
   };
 
   widget.updateDisplay = updateDisplay;
   widget.isProgrammaticUpdate = () => isProgrammaticUpdate;
   
-  // 设置预设临时步长（供 preset callback 调用）
   widget.setPresetTemporaryStep = function() {
-    // 保存当前的用户步长（如果不是临时步长状态）
     if (!isPresetTemporaryStep) {
       userStepW = widgetWidth.options?.step2 ?? widgetWidth.options?.step ?? 64;
       userStepH = widgetHeight.options?.step2 ?? widgetHeight.options?.step ?? 64;
     }
-    
-    // 设置临时步长
     widgetWidth.options.step = 1;
     widgetWidth.options.step2 = 1;
     widgetHeight.options.step = 1;
@@ -1323,40 +1068,30 @@ function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeight) {
     isPresetTemporaryStep = true;
   };
   
-  // 更新用户步长（供 Canvas Setting 调用）
   widget.updateUserStep = function(stepW, stepH) {
     userStepW = stepW;
     userStepH = stepH;
   };
 
   widget.onRemove = function() {
-    // 清理拖拽状态
     if (isDragging && currentSliderBox === sliderBox) {
       isDragging = false;
       currentSliderBox = null;
       sliderBox.classList.remove("dragging");
     }
-    
-    // 从适配器中移除
     adapter.destroy();
-    
-    // 移除坐标提示
     if (coordTooltip && document.body.contains(coordTooltip)) {
       document.body.removeChild(coordTooltip);
     }
-    
-    // 移除事件监听
     document.removeEventListener("mousemove", handleMouseMove, true);
     document.removeEventListener("mouseup", handleMouseUp, true);
   };
 
-  // 立即执行一次显示更新，确保初次渲染正确
   updateDisplay();
-  // 延迟再执行一次，确保DOM完全就绪
   setTimeout(updateDisplay, 100);
 
   return widget;
-};
+}
 
 // ========== 主扩展 ==========
 
@@ -1389,64 +1124,43 @@ app.registerExtension({
 
     const originalOnConfigure = node.onConfigure;
     node.onConfigure = function(info) {
-      if (originalOnConfigure) {
-        originalOnConfigure.apply(this, arguments);
-      };
+      if (originalOnConfigure) originalOnConfigure.apply(this, arguments);
       restoreWidgetRange(this);
-      
       if (slider2D && typeof slider2D.updateDisplay === 'function') {
-        try {
-          slider2D.updateDisplay();
-        } catch (err) {
-          console.warn("Failed to update display in onConfigure:", err);
-        }
+        try { slider2D.updateDisplay(); } 
+        catch (err) { console.warn("Failed to update display in onConfigure:", err); }
       }
-      
       forceRefresh(this);
     };
 
     const originalOnSerialize = node.onSerialize;
     node.onSerialize = function(info) {
-      if (originalOnSerialize) {
-        originalOnSerialize.apply(this, arguments);
-      };
-      
+      if (originalOnSerialize) originalOnSerialize.apply(this, arguments);
       saveWidgetRange(this);
-
-      if (info.properties) {
-        info.properties.widgetRange = this.properties?.widgetRange;
-      }
+      if (info.properties) info.properties.widgetRange = this.properties?.widgetRange;
     };
 
     setTimeout(() => {
       restoreWidgetRange(node);
       if (slider2D && typeof slider2D.updateDisplay === 'function') {
-        try {
-          slider2D.updateDisplay();
-        } catch (err) {
-          console.warn("Failed to update display in setTimeout:", err);
-        };
+        try { slider2D.updateDisplay(); } 
+        catch (err) { console.warn("Failed to update display in setTimeout:", err); }
       }
     }, 500);
 
     let isProgrammaticChange = false;
-    let isPresetChanging = false; // 标记正在改变preset，用于避免nodes2.0的Vue更新冲突
+    let isPresetChanging = false;
 
     const onPresetChange = (value) => {
       if (value === "Custom") return;
-
       const size = SIZE_PRESETS[value];
       if (size) {
         isPresetChanging = true;
-        
-        // 设置临时步长，允许预设值不严格对齐网格
         try {
           if (slider2D && typeof slider2D.setPresetTemporaryStep === 'function') {
             slider2D.setPresetTemporaryStep();
           }
-        } catch (err) {
-          console.warn("Failed to set preset temporary step:", err);
-        }
+        } catch (err) { console.warn("Failed to set preset temporary step:", err); }
         
         isProgrammaticChange = true;
         forceUpdateWidgetValue(widgetWidth, size[0]);
@@ -1455,33 +1169,23 @@ app.registerExtension({
         isPresetChanging = false;
         
         try {
-          if (slider2D && typeof slider2D.updateDisplay === 'function') {
-            slider2D.updateDisplay();
-          }
-        } catch (err) {
-          console.warn("Failed to update display:", err);
-        }
+          if (slider2D && typeof slider2D.updateDisplay === 'function') slider2D.updateDisplay();
+        } catch (err) { console.warn("Failed to update display:", err); }
       }
     };
 
     const checkCustomState = () => {
       if (isProgrammaticChange) return;
       if (slider2D && slider2D.isProgrammaticUpdate && slider2D.isProgrammaticUpdate()) return;
-
       const currentPreset = widgetPreset.value;
       if (currentPreset === "Custom") return;
-
       const targetSizes = SIZE_PRESETS[currentPreset];
       if (!targetSizes) return;
-
       if (widgetWidth.value !== targetSizes[0] || widgetHeight.value !== targetSizes[1]) {
         widgetPreset.value = "Custom";
         if (slider2D && typeof slider2D.updateDisplay === 'function') {
-          try {
-            slider2D.updateDisplay();
-          } catch (err) {
-            console.warn("Failed to update display in checkCustomState:", err);
-          }
+          try { slider2D.updateDisplay(); } 
+          catch (err) { console.warn("Failed to update display in checkCustomState:", err); }
         }
         forceRefresh(node);
       }
@@ -1497,13 +1201,9 @@ app.registerExtension({
     widgetWidth.callback = function (value) {
       const r = originalWidthCallback ? originalWidthCallback.apply(this, arguments) : undefined;
       checkCustomState();
-      // 在preset改变期间跳过updateDisplay，避免nodes2.0的Vue冲突
       if (!isPresetChanging && slider2D && typeof slider2D.updateDisplay === 'function') {
-        try {
-          slider2D.updateDisplay();
-        } catch (err) {
-          console.warn("Failed to update display in width callback:", err);
-        }
+        try { slider2D.updateDisplay(); } 
+        catch (err) { console.warn("Failed to update display in width callback:", err); }
       }
       return r;
     };
@@ -1512,13 +1212,9 @@ app.registerExtension({
     widgetHeight.callback = function (value) {
       const r = originalHeightCallback ? originalHeightCallback.apply(this, arguments) : undefined;
       checkCustomState();
-      // 在preset改变期间跳过updateDisplay，避免nodes2.0的Vue冲突
       if (!isPresetChanging && slider2D && typeof slider2D.updateDisplay === 'function') {
-        try {
-          slider2D.updateDisplay();
-        } catch (err) {
-          console.warn("Failed to update display in height callback:", err);
-        }
+        try { slider2D.updateDisplay(); } 
+        catch (err) { console.warn("Failed to update display in height callback:", err); }
       }
       return r;
     };
@@ -1531,19 +1227,13 @@ app.registerExtension({
       const widgetWidth = node.widgets.find(w => w.name === "width");
       const widgetHeight = node.widgets.find(w => w.name === "height");
       const targetWidgets = [widgetWidth, widgetHeight].filter(w => w);
-
       if (!widgetWidth) return;
 
       const currentMin = widgetWidth.options.min ?? 128;
       const currentMax = widgetWidth.options.max ?? 4096;
       const currentStep = widgetWidth.options.step2 ?? widgetWidth.options.step ?? 128;
 
-      const result = await showCanvasSettingDialog({
-        currentMin,
-        currentMax,
-        currentStep
-      });
-
+      const result = await showCanvasSettingDialog({ currentMin, currentMax, currentStep });
       if (result === null) return;
 
       const { min, max, step } = result;
@@ -1554,12 +1244,9 @@ app.registerExtension({
         w.options.step = step;
         w.options.step2 = step;
 
-        // 调整当前值以符合新的范围
         let newValue = w.value;
         if (newValue < min) newValue = min;
         if (newValue > max) newValue = max;
-        
-        // 对齐到step
         newValue = Math.round(newValue / step) * step;
         if (newValue < min) newValue = min;
         if (newValue > max) newValue = max;
@@ -1567,7 +1254,6 @@ app.registerExtension({
         forceUpdateWidgetValue(w, newValue);
       });
       
-      // 更新 slider2D 的用户步长
       const slider2D = node.widgets.find(w => w.name === "canvas_2d_slider");
       if (slider2D && typeof slider2D.updateUserStep === 'function') {
         slider2D.updateUserStep(step, step);
@@ -1575,93 +1261,10 @@ app.registerExtension({
 
       saveWidgetRange(node);
       forceRefresh(node);
-      
       if (slider2D?.updateDisplay) slider2D.updateDisplay();
-      
       setTimeout(() => forceRefresh(node), 50);
     };
 
-    const showCurrentConfig = async () => {
-      const w = node.widgets.find(w => w.name === "width");
-      if (!w || !w.options) {
-        if (app.extensionManager?.dialog) {
-          await app.extensionManager.dialog.prompt({
-            title: "Configuration",
-            message: "No configuration found.",
-            defaultValue: ""
-          });
-        } else {
-          alert("No configuration found.");
-        }
-        return;
-      }
-      const opts = w.options;
-      const configMessage = 
-        `Min: ${opts.min}\n` +
-        `Max: ${opts.max}\n` +
-        `Step: ${opts.step}\n` +
-        `Step2: ${opts.step2}\n` +
-        `Current Value: ${w.value}`;
-      
-      if (app.extensionManager?.dialog) {
-        await app.extensionManager.dialog.prompt({
-          title: "Current Configuration",
-          message: configMessage,
-          defaultValue: ""
-        });
-      } else {
-        alert(`Current Config:\n\n${configMessage}`);
-      }
-    };
-
-    const resetToDefault = async () => {
-      let confirmed = false;
-      
-      if (app.extensionManager?.dialog) {
-        confirmed = await app.extensionManager.dialog.confirm({
-          title: "Reset to Default",
-          message: "Are you sure you want to reset all range settings to default values?\n\nMin: 128, Max: 4096, Step: 128",
-          type: "default"
-        });
-      } else {
-        confirmed = confirm("Are you sure you want to reset all range settings to default values?\n\nMin: 128, Max: 4096, Step: 128");
-      }
-      
-      if (!confirmed) return;
-      
-      const widgetWidth = node.widgets.find(w => w.name === "width");
-      const widgetHeight = node.widgets.find(w => w.name === "height");
-      
-      [widgetWidth, widgetHeight].forEach(w => {
-        if (w) {
-          w.options.min = 128;
-          w.options.max = 4096;
-          w.options.step = 128;
-          w.options.step2 = 128;
-          forceUpdateWidgetValue(w, Math.max(128, Math.min(4096, w.value)));
-        }
-      });
-      
-      saveWidgetRange(node);
-      forceRefresh(node);
-      
-      const slider2D = node.widgets.find(w => w.name === "canvas_2d_slider");
-      if (slider2D?.updateDisplay) slider2D.updateDisplay();
-    };
-
-    return [
-      null,
-      {
-        content: "Canvas Setting", callback: openCanvasSetting
-        //has_submenu: true,
-        //submenu: {
-          //options: [
-            //{ content: "Canvas Setting", callback: openCanvasSetting },
-            //{ content: "Show Current", callback: showCurrentConfig },
-            //{ content: "Reset", callback: resetToDefault }
-          //]
-        //}
-      }
-    ];
+    return [null, { content: "Canvas Setting", callback: openCanvasSetting }];
   }
 });

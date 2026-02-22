@@ -1,578 +1,253 @@
-import { app } from "/scripts/app.js";
-import { hexToRgba } from "../theme.js";
+import {
+  ModelMetadata, initConfig, getTagsDB, saveConfig,
+  saveFilteredConfig, collectModelsFromGraph,
+  isModelLoaderNode, getModelFromNode,
+  getModelWidgetName, getModelListFromNode
+} from "../config.js";
 import { ComfyThemeAdapter } from "../adapter.js";
-import { custom } from "../style.js";
+import { custom, showToast, addButtonHover } from "../style.js";
+import { hexToRgba } from "../theme.js";
+import { DialogBuilder, DIALOG_TYPE } from "../dialog.js";
+import { app } from "/scripts/app.js";
 
-// ========== 配置 ==========
+let isInitialized = false;
 
-const MODEL_LOADER_CLASSES= [
-  "CheckpointLoaderSimple",
-  "CheckpointLoader",
-  "UNETLoader",
-  "CLIPLoader",
-  "VAELoader",
-  "LoraLoader",
-  "LoraLoaderModelOnly",
-  "ControlNetLoader",
-  "DiffControlNetLoader",
-  "StyleModelLoader",
-  "CLIPVisionLoader",
-  "IPAdapterModelLoader",
-  "UpscaleModelLoader",
-  "UNETLoaderGGUF",
-  "DualCLIPLoader",
-  "TripleCLIPLoader",
-  "UNETLoaderINPAINT",
-  "VideoLinearCFGGuidance",
-  "ImageOnlyCheckpointLoader",
-  "SVD_img2vid_Conditioning",
-  "InpaintModelConditioning",
-  "LoadDiffusionModel",
-  "LoadCLIP",
-  "LoadVAE",
-  "LoadLoRA",
-  "LoadCheckpoint",
-];
-
-const CONFIG_PATH = "custom_nodes/ComfyUI_A1RWorkshop/config.json";
-
-let globalTagsDatabase = {};
-let nextId = {};
-
-async function loadConfig() {
-  const response = await fetch(`/api/a1rworkshop/config`);
-
-  if (response.ok) {
-    const data = await response.json();
-    globalTagsDatabase = data.EmbeddingTags || {};
-
-    Object.keys(globalTagsDatabase).forEach(category => {
-      const id = Object.keys(globalTagsDatabase[category] || {}).map(Number).filter(n => !isNaN(n));
-      nextId[category] = id.length > 0 ? Math.max(...id) + 1 : 1
-    });
-
-    return true
-  };
-
-  globalTagsDatabase = {};
-  nextId = {};
-
-  return false
-};
-
-async function saveConfig() {
-  const config = {
-    EmbeddingTags: globalTagsDatabase
-  };
-
-  const response = await fetch(`/api/a1rworkshop/config`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify(config)
-  });
-
-  if (response.ok) { return true };
-
-  return false
-};
-
-function addEntry(category, modelName, tagsText) {
-  if (!category) { category = getModelCategory(modelName) };
-
-  if (!globalTagsDatabase[category]) {
-    globalTagsDatabase[category] = {};
-    nextId[category] = 1
-  };
-
-  const baseName = getModelName(modelName);
-  if (!baseName) { return null };
-
-  const id = String(nextId[category]++);
-  globalTagsDatabase[category][id] = {
-    Model: modelName,
-    Tags: tagsText.trim()
-  };
-
-  return { id, category, entry: globalTagsDatabase[category][id] }
-};
-
-function updateEntry(category, id, modelName, tagsText) {
-  if (!globalTagsDatabase[category]?.[id]) { return false };
-
-  globalTagsDatabase[category][id] = {
-    Model: modelName,
-    Tags: tagsText.trim()
-  };
-
-  return true
-};
-
-function findEntry(modelName, widgetName) {
-  const baseName = getModelName(modelName);
-  const category = getModelCategory(modelName, widgetName);
-
-  if (globalTagsDatabase[category]) {
-    for (const [id, entry] of Object.entries(globalTagsDatabase[category])) {
-      if (getModelName(entry.Model) === baseName) {
-        return { id, category, entry }
-      }
-    }
-  };
-
-  for (const [cate, entries] of Object.entries(globalTagsDatabase)) {
-    for (const [id, entry] of Object.entries(entries)) {
-      if (getModelName(entry.Model) === baseName) {
-        return { id, category: cate, entry }
-      }
-    }
-  };
-
-  return null
-};
-
-function deleteEntry(category, id) {
-  if (globalTagsDatabase[category]) {
-    delete globalTagsDatabase[category][id]
+async function ensureInitialized() {
+  if (!isInitialized) {
+    await initConfig();
+    isInitialized = true
   }
 };
 
-function getOrCreateEntry(modelName, widgetName) {
-  const existing = findEntry(modelName, widgetName);
-  if (existing) {
-    return existing
-  };
+// ========== 主对话框 ==========
 
-  const category = getModelCategory(modelName, widgetName);
-  const result = addEntry(category, modelName, "");
-
-  return result
-};
-
-// ========== 自定义对话框 ==========
-
-function showToast(message, type = "success") {
-  const adapter = new ComfyThemeAdapter();
-  const theme = adapter.theme;
-
-  const toast = custom.toast(theme);
-  toast.textContent = message;
-  document.body.appendChild(toast);
-  requestAnimationFrame(() => { toast.style.opacity = "1" });
-
-  setTimeout(() => {
-    toast.style.opacity = "0";
-    setTimeout(() => { toast.remove() }, 300);
-  }, 2500);
-
-  setTimeout(() => { adapter.destroy() }, 3000)
-};
-
-function showDialog(node) {
-  const modelList = getModelListFromNode(node) || [];
-  let currentModel = getModelFromNode(node);
-  let currentNode = getModelWidgetName(node);
-  let currentCategory = getModelCategory(currentModel, currentNode);
-  let currentEntry = getOrCreateEntry(currentModel, currentNode);
-
-  const adapter = new ComfyThemeAdapter();
-  let theme = adapter.theme;
-
-  return new Promise((resolve) => {
-
-    // --- 窗口 ---
-
-    const overlay = custom.overlay(theme);
-    const dialog = custom.dialog(theme);
-    const title = custom.dialogTitle("Embedding Tags Editor", theme);
-
-    title.style.position = "relative";
-    title.style.overflow = "visible";
-    title.style.paddingRight = "140px";
-
-    // 标题栏右侧按钮容器
-    const titleControls = document.createElement("div");
-    titleControls.style.cssText = "position:absolute;right:12px;top:0;bottom:0;display:flex;align-items:center;gap:8px;z-index:10;pointer-events:auto;";
-
-    const openManagerBtn = custom.dialogButton("Open Manager", theme);
-    openManagerBtn.style.padding = "6px 12px";
-    openManagerBtn.addEventListener("click", () => {
-      showEditor();
-    });
-    titleControls.appendChild(openManagerBtn);
-
-    title.appendChild(titleControls);
-    dialog.appendChild(title);
-
-    // 主题适配
-    adapter.bindElement(dialog, {
-      background: "primary",
-      color: "text",
-      boxShadow: (t) => `0 4px 16px ${hexToRgba(t.shadow, 0.5)}`
-    });
-
-    adapter.bindElement(title, { background: "title", color: "text" });
-    adapter.bindElement(openManagerBtn, { background: "background", color: "text" });
-    adapter.onThemeChange((newTheme) => { theme = newTheme });
-
-    // --- 内容 ---
-
-    // 模型选择
-    const modelSection = document.createElement("div");
-    const modelSectionRow = custom.container(theme);
-    const modelLabel = custom.sectionLabel("model", theme);
-    const modelSelectorWrapper = custom.controlWrapper(theme);
-    const modelSelector = custom.selector(theme);
-    const defaultOption = document.createElement("option");
+function showEditor(node) {
+  ensureInitialized().then(() => {
+    const db = getTagsDB();
+    const modelList = getModelListFromNode(node) || [];
+    let currentModel = getModelFromNode(node);
+    let currentWidgetName = getModelWidgetName(node);
     
-    modelSection.style.marginBottom = "24px";
-    defaultOption.value = "";
-    defaultOption.textContent = "-- Select a model --";
+    // 使用 ModelMetadata 获取准确类别
+    let currentMetadata = currentModel 
+      ? new ModelMetadata(currentModel, node, currentWidgetName)
+      : null;
+    
+    let currentEntry = currentMetadata 
+      ? db.getOrCreate(currentModel, currentWidgetName, node)
+      : null;
 
-    modelList.forEach((modelName) => {
-      const option = document.createElement("option");
-      option.value = modelName;
-      option.textContent = modelName;
-      modelSelector.appendChild(option);
-    });
+    // 创建内容容器
+    const content = document.createElement("div");
+    content.style.cssText = "display: flex; flex-direction: column; gap: 16px; width: 100%;";
 
-    if (currentModel) {
-      modelSelector.value = currentModel;
-    };
-
-    modelSelector.addEventListener("focus", () => {
-      modelSelectorWrapper.style.outline = `1px solid ${theme.text}`
-    });
-
-    modelSelector.addEventListener("blur", () => {
-      modelSelectorWrapper.style.outline = "none"
-    });
-
-    modelSelector.addEventListener("change", () => {
-      const selectedModel = modelSelector.value;
-      if (!selectedModel) return;
-
+    // 模型选择区域
+    const modelSection = createModelSection(modelList, currentModel, (selectedModel) => {
       currentModel = selectedModel;
-      currentCategory = getModelCategory(currentModel, currentNode);
-      currentEntry = getOrCreateEntry(currentModel, currentNode);
-      tagsTextarea.value = currentEntry.entry.Tags || ""
+      currentMetadata = new ModelMetadata(selectedModel, node, currentWidgetName);
+      currentEntry = db.getOrCreate(selectedModel, currentWidgetName, node);
+      
+      const textarea = content.querySelector('[data-role="tags-textarea"]');
+      if (textarea) textarea.value = currentEntry.entry.Tags || "";
     });
 
-    modelSelector.appendChild(defaultOption);
-    modelSelectorWrapper.appendChild(modelSelector);
-    modelSectionRow.appendChild(modelLabel);
-    modelSectionRow.appendChild(modelSelectorWrapper);
-    modelSection.appendChild(modelSectionRow);
-    dialog.appendChild(modelSection);
+    // 标签输入区域
+    const tagSection = createTagSection(currentEntry?.entry.Tags || "");
 
-    adapter.bindElement(modelLabel, { color: "text" });
-    adapter.bindElement(modelSelector, { background: "background", color: "text" });
+    content.appendChild(modelSection);
+    content.appendChild(tagSection);
 
-    // 标签输入
-    const tagsSection = document.createElement("div");
-    const tagsSectionRow = custom.container(theme);
-    const tagsLabel = custom.sectionLabel("tags", theme);
-    const tagsTextareaWrapper = custom.controlWrapper(theme);
-    const tagsTextarea = custom.textarea(theme);
+    // 使用 DialogBuilder 创建对话框
+    const builder = new DialogBuilder(DIALOG_TYPE.FORM)
+      .setTitle("Embedding Tags Editor")
+      .setContent(content)
+      .setCloseOnOverlayClick(true)
+      .setCloseOnEsc(true)
+      .setCloseButton(false)
+      .addCustomHeaderButton("Open Manager", "secondary", () => { showManager(); })
+      .addButton("Cancel", "secondary", () => null)
+      .addButton("Save", "secondary", async () => {
+        const selector = content.querySelector('[data-role="model-selector"]');
+        const textarea = content.querySelector('[data-role="tags-textarea"]');
+        const model = selector?.value || "";
+        const tags = textarea?.value || "";
 
-    tagsSection.style.marginBottom = "24px";
-    tagsSectionRow.style.alignItems = "flex-start";
-    tagsTextareaWrapper.style.padding = "8px 12px";
-    tagsTextarea.placeholder = "";// 文本内容为空时显示的占位符，没想好，暂时为空
-    tagsTextarea.spellcheck = false;
-    tagsTextarea.value = currentEntry.entry.Tags || "";
-    tagsTextarea.style.resize = "none";
+        if (!model) {
+          showToast("Please select a model first", "error");
+          return false
+        };
 
-    tagsTextarea.addEventListener("focus", () => {
-      tagsTextareaWrapper.style.outline = `1px solid ${theme.text}`
-    });
+        // 使用 ModelMetadata 确保类别准确
+        const metadata = new ModelMetadata(model, node, currentWidgetName);
+        
+        if (currentEntry?.id) {
+          db.update(currentEntry.category, currentEntry.id, model, tags)
+        } else {
+          db.add(metadata, tags)
+        };
 
-    tagsTextarea.addEventListener("blur", () => {
-      tagsTextareaWrapper.style.outline = "none";
-    });
+        await saveConfig();
+        showToast("Saved for " + metadata.getDisplayName(), "success");
+        return true;
+      }, { autoFocus: true })
+      .addButton("Apply", "default", async () => {
+        const selector = content.querySelector('[data-role="model-selector"]');
+        const textarea = content.querySelector('[data-role="tags-textarea"]');
+        const model = selector?.value || "";
+        const tags = textarea?.value || "";
 
-    tagsTextareaWrapper.appendChild(tagsTextarea);
-    tagsSectionRow.appendChild(tagsLabel);
-    tagsSectionRow.appendChild(tagsTextareaWrapper);
-    tagsSection.appendChild(tagsSectionRow);
-    dialog.appendChild(tagsSection);
+        if (!model) {
+          showToast("Please select a model first", "error");
+          return false
+        };
 
-    adapter.bindElement(tagsLabel, { color: "text" });
-    adapter.bindElement(tagsTextarea, { background: "background", color: "text" });
+        const metadata = new ModelMetadata(model, node, currentWidgetName);
+        
+        if (currentEntry?.id) {
+          db.update(currentEntry.category, currentEntry.id, model, tags);
+        } else {
+          db.add(metadata, tags)
+        };
 
-    // --- 底部按钮 ---
+        await saveConfig();
+        showToast("Configuration applied", "success");
+        return false
+      });
 
-    const buttonRow = custom.dialogButtonBar();
-    const cancelButton = custom.dialogButton("Cancel", theme);
-    const saveButton = custom.dialogButton("Save", theme);
-    const applyButton = custom.dialogButton("Apply", theme);
-
-    // 点击事件
-    function closeDialog() {
-      if (overlay.parentNode) { document.body.removeChild(overlay) }
-    };
-
-    cancelButton.addEventListener("click", () => { closeDialog(false) });
-
-    saveButton.addEventListener("click", async() => {
-      const model = modelSelector.value;
-      const tag = tagsTextarea.value.trim();
-      if (!model) {
-        showToast("Please select a model first", "error"); 
-        return
-      };
-
-      const category = currentEntry?.category || getModelCategory(model, currentNode);
-      const id = currentEntry?.id;
-      if (id && globalTagsDatabase[category]?.[id]) {
-        updateEntry(category, id, model, tag)
-      } else {
-        addEntry(category, model, tag)
-      };
-
-      await saveConfig();
-      showToast("Saved for " + getModelName(model), "success");
-      closeDialog(true)
-    });
-
-    applyButton.addEventListener("click", async() => {
-      const model = modelSelector.value;
-      const tag = tagsTextarea.value.trim();
-      if (!model) {
-        showToast("Please select a model first", "error"); 
-        return
-      };
-
-      const category = currentEntry?.category || getModelCategory(model, currentNode);
-      const id = currentEntry?.id;
-      if (id && globalTagsDatabase[category]?.[id]) {
-        updateEntry(category, id, model, tag)
-      } else {
-        addEntry(category, model, tag)
-      };
-
-      await saveConfig();
-      showToast("Configuration applied", "success");
-    });
-
-    buttonRow.appendChild(cancelButton);
-    buttonRow.appendChild(saveButton);
-    buttonRow.appendChild(applyButton);
-    dialog.appendChild(buttonRow);
-
-    adapter.bindElement(cancelButton, { background: "background", color: "text" });
-    adapter.bindElement(saveButton, { background: "background", color: "text" });
-    adapter.bindElement(applyButton, { background: "background", color: "text" });
-
-    // --- 显示窗口 ---
-
-    overlay.appendChild(dialog);
-    document.body.appendChild(overlay);
-
-    // 关闭窗口
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) { closeDialog(false) };
-
-      const onEsc = (e) => {
-        if (e.key == "Escape") {
-          closeDialog(false);
-          document.removeEventListener("keydown", onEsc)
-        }
-      };
-
-      document.addEventListener("keydown", onEsc)
-    });
-
-    // 聚焦输入框
-    setTimeout(() => {
-      tagsTextarea.focus();
-      tagsTextarea.setSelectionRange(
-        tagsTextarea.value.length,
-        tagsTextarea.value.length
-      )
-    }, 80)
+    return builder.open()
   })
 };
 
-function showEditor() {
-  const adapter = new ComfyThemeAdapter();
-  let theme = adapter.theme;
+function showManager() {
+  ensureInitialized().then(() => {
+    const db = getTagsDB();
+    const adapter = new ComfyThemeAdapter();
+    const theme = adapter.theme;
+    const isClassic = adapter.isClassic;
 
-  // 选择模式状态
-  let selectMode = false;
-  const selectedItems = new Set();
-  const listItemElements = new Map();
+    let selectMode = false;
+    const selectedItems = new Set();
+    const listItemElements = new Map();
+    
+    // 存储每个类别的展开状态
+    const categoryExpandedState = new Map();
 
-  return new Promise((resolve) => {
+    // 创建内容容器
+    const content = document.createElement("div");
+    content.style.cssText = "display: flex; flex-direction: column; gap: 12px; flex: 1; max-height: 80vh; overflow-y: auto;";
 
-    // --- 窗口 ---
-
-    const overlay = custom.overlay(theme);
-    const dialog = custom.dialog(theme);
-    const title = custom.dialogTitle("Tags Manager", theme);
-
-    dialog.style.width = "480px";
-    dialog.style.maxWidth = "90vw";
-    dialog.style.maxHeight = "85vh";
-    dialog.style.display = "flex";
-    dialog.style.flexDirection = "column";
-    title.style.position = "relative";
-    title.style.overflow = "visible";
-    title.style.paddingRight = "140px";
-    title.style.marginBottom = "0";
-
-    // 标题栏右侧按钮容器
-    const titleControls = document.createElement("div");
-    titleControls.style.cssText = "position:absolute;right:12px;top:0;bottom:0;display:flex;align-items:center;gap:8px;z-index:10;pointer-events:auto;";
-
-    title.appendChild(titleControls);
-    dialog.appendChild(title);
-
-    // 主题适配
-    adapter.bindElement(dialog, {
-      background: "primary",
-      color: "text",
-      boxShadow: (t) => `0 4px 16px ${hexToRgba(t.shadow, 0.5)}`
-    });
-
-    adapter.bindElement(title, { background: "title", color: "text" });
-    adapter.onThemeChange((newTheme) => { theme = newTheme });
-
-    // 内容容器
-    const contentContainer = document.createElement("div");
-    contentContainer.style.cssText = "display:flex;flex-direction:column;gap:12px;flex:1;max-height:80vh;overflow-y:auto;";
-
-    dialog.appendChild(contentContainer);
-
-    // --- 标题栏按钮 ---
-
-    function updateTitleButtons() {
-      titleControls.innerHTML = "";
-
-      // Delete 按钮（仅在选择模式下显示）
-      if (selectMode) {
-        const deleteBtn = custom.dialogButton("Delete", theme);
-        deleteBtn.style.flex = "0 0 auto";
-        deleteBtn.style.padding = "6px 14px";
-        deleteBtn.style.fontSize = "12px";
-        adapter.bindElement(deleteBtn, { background: "background", color: "text" });
-        deleteBtn.addEventListener("click", deleteSelectedItems);
-        titleControls.appendChild(deleteBtn);
-      }
-
-      // Select / Done 按钮
-      const selectBtn = custom.dialogButton(selectMode ? "Done" : "Select", theme);
-      selectBtn.style.flex = "0 0 auto";
-      selectBtn.style.padding = "6px 14px";
-      selectBtn.style.fontSize = "12px";
-      selectBtn.style.minWidth = "70px";
-      selectBtn.style.textAlign = "center";
-      adapter.bindElement(selectBtn, { background: "background", color: "text" });
-      selectBtn.addEventListener("click", toggleSelectMode);
-      titleControls.appendChild(selectBtn);
-    };
-
-    function toggleSelectMode() {
-      selectMode = !selectMode;
-      if (!selectMode) { selectedItems.clear() };
-      updateTitleButtons();
-      renderList();
-    };
-
-    function toggleItemSelection(category, id) {
-      const key = `${category}:${id}`;
-      if (selectedItems.has(key)) {
-        selectedItems.delete(key)
-      } else {
-        selectedItems.add(key)
-      };
-      updateItemVisual(category, id);
-    };
-
-    function updateItemVisual(category, id) {
-      const key = `${category}:${id}`;
-      const itemEl = listItemElements.get(key);
-      if (!itemEl) return;
-
-      if (selectMode && selectedItems.has(key)) {
-        itemEl.style.outline = `2px solid ${theme.prompt}`;
-        itemEl.style.outlineOffset = "0px";
-        itemEl.style.background = hexToRgba(theme.prompt, 0.05)
-      } else {
-        itemEl.style.outline = "none";
-        itemEl.style.background = theme.background
-      }
-    };
-
-    async function deleteSelectedItems() {
-      if (selectedItems.size === 0) {
-        showToast("No items selected", "error");
-        return
-      };
-
-      if (!confirm(`Delete ${selectedItems.size} selected item(s)?`)) return;
-
-      const count = selectedItems.size;
-      selectedItems.forEach(key => {
-        const [cat, entryId] = key.split(":");
-        deleteEntry(cat, entryId)
-      });
-      selectedItems.clear();
-
-      await saveConfig();
-      showToast(`Deleted ${count} items`, "success");
-      renderList();
-    };
-
-    // --- 列表渲染 ---
-
-    function renderList() {
-      contentContainer.innerHTML = "";
+    // 渲染列表的函数
+    const renderList = () => {
+      content.innerHTML = "";
+      listItemElements.forEach((el) => { if (el._cleanup) el._cleanup() });
       listItemElements.clear();
 
       const wrapper = document.createElement("div");
-      wrapper.style.cssText = "display:flex;flex-direction:column;gap:12px;";
+      wrapper.style.cssText = "display: flex; flex-direction: column; gap: 8px;";
 
-      // 模型列表容器
-      const listContainer = document.createElement("div");
-      listContainer.style.cssText = "display:flex;flex-direction:column;gap:8px;max-height:45vh;overflow-y:auto;padding:4px;";
+      const categories = db.getCategories();
+      let totalValidEntries = 0;
 
-      // 遍历所有类别
-      let hasEntries = false;
-      Object.entries(globalTagsDatabase).forEach(([category, entries]) => {
-        if (Object.keys(entries).length === 0) return;
-        hasEntries = true;
+      categories.forEach(category => {
+        const entries = db.getByCategory(category);
 
-        // 类别标题
-        const catHeader = document.createElement("div");
-        catHeader.style.cssText = "font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1px;margin-top:8px;margin-bottom:4px;padding:4px 8px;border-radius:4px;";
-        catHeader.textContent = category;
-        adapter.bindElement(catHeader, { color: "prompt", background: "background" });
-        listContainer.appendChild(catHeader);
+        const validEntries = Object.entries(entries).filter(([id, entry]) => {
+          return entry.Tags && entry.Tags.trim().length > 0
+        });
 
-        // 条目列表
-        Object.entries(entries).forEach(([id, entry]) => {
-          const item = createListItem(category, id, entry);
-          listContainer.appendChild(item);
-        })
+        if (validEntries.length === 0) return;
+
+        totalValidEntries += validEntries.length;
+
+        // 创建类别容器
+        const categoryContainer = document.createElement("div");
+        categoryContainer.style.cssText = "display: flex; flex-direction: column; gap: 4px;";
+        
+        // 初始化展开状态（默认展开）
+        if (!categoryExpandedState.has(category)) {
+          categoryExpandedState.set(category, true)
+        };
+
+        const isExpanded = categoryExpandedState.get(category);
+
+        // 条目容器（可动画）- 先创建，后传入header
+        const entriesContainer = document.createElement("div");
+        entriesContainer.dataset.role = "entries-container";
+        entriesContainer.style.cssText = `
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          overflow: hidden;
+          transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+                      opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                      margin 0.25s ease;
+          ${isClassic ? '' : 'will-change: max-height, opacity;'}
+        `;
+
+        // 创建可点击的类别标题栏 - 传入容器引用以便后续操作
+        const catHeader = createCategoryHeader(
+          category, 
+          validEntries.length, 
+          isExpanded, 
+          theme, 
+          isClassic,
+          entriesContainer, // 传入容器引用
+          categoryExpandedState
+        );
+
+        // 初始状态设置
+        if (!isExpanded) {
+          entriesContainer.style.maxHeight = "0px";
+          entriesContainer.style.opacity = "0";
+          entriesContainer.style.marginTop = "0px";
+          entriesContainer.style.visibility = "hidden"
+        } else {
+          entriesContainer.style.maxHeight = "none";
+          entriesContainer.style.opacity = "1";
+          entriesContainer.style.marginTop = "4px";
+          entriesContainer.style.visibility = "visible"
+        };
+
+        // 创建条目
+        validEntries.forEach(([id, entry]) => {
+          const item = createListItem(
+            category, id, entry, theme,
+            selectMode, selectedItems, listItemElements,
+            updateRemoveButtonVisibility, db
+          );
+          entriesContainer.appendChild(item)
+        });
+
+        categoryContainer.appendChild(catHeader);
+        categoryContainer.appendChild(entriesContainer);
+        wrapper.appendChild(categoryContainer)
       });
 
-      if (!hasEntries) {
+      if (totalValidEntries === 0) {
         const emptyMsg = document.createElement("div");
-        emptyMsg.style.cssText = "text-align:center;padding:40px 20px;opacity:0.6;font-style:italic;";
-        emptyMsg.textContent = "No tags stored yet. Click + to add one.";
-        adapter.bindElement(emptyMsg, { color: "text" });
-        listContainer.appendChild(emptyMsg);
-      }
+        emptyMsg.style.cssText = "text-align: center; padding: 40px 20px; opacity: 0.6; font-style: italic;";
+        emptyMsg.textContent = "";// 输入框提示，没想好先空着
 
-      wrapper.appendChild(listContainer);
+        const msgAdapter = new ComfyThemeAdapter();
+        msgAdapter.bindElement(emptyMsg, { color: "text" });
+
+        emptyMsg.addEventListener("remove", () => msgAdapter.destroy());
+        wrapper.appendChild(emptyMsg)
+      };
+
+      content.appendChild(wrapper);
 
       // "+" 按钮
       const addBtn = document.createElement("button");
-      addBtn.style.cssText = "width:100%;min-height:44px;padding:10px 14px;border:1px dashed;border-radius:6px;opacity:0.6;font-size:20px;cursor:pointer;transition:all 0.2s;margin-top:8px;display:flex;align-items:center;justify-content:center;";
+      addBtn.style.cssText = "width: 100%; min-height: 44px; padding: 10px 14px; border: 1px dashed; border-radius: 6px; opacity: 0.6; font-size: 20px; cursor: pointer; transition: all 0.2s; margin-top: 8px; display: flex; align-items: center; justify-content: center;";
       addBtn.textContent = "+";
-      adapter.bindElement(addBtn, { borderColor: "border", background: "background", color: "text" });
+
+      const btnAdapter = new ComfyThemeAdapter();
+      btnAdapter.bindElement(addBtn, {
+        borderColor: "border",
+        background: "background",
+        color: "text"
+      });
 
       addBtn.addEventListener("mouseenter", () => {
         addBtn.style.borderColor = theme.prompt;
@@ -586,599 +261,1029 @@ function showEditor() {
       });
       addBtn.addEventListener("click", async () => {
         const added = await showAdder();
-        if (added) { renderList() }
+        if (added) renderList()
       });
 
-      wrapper.appendChild(addBtn);
-
-      // 底部按钮栏
-      const bottomBar = custom.dialogButtonBar();
-      bottomBar.style.marginTop = "8px";
-      bottomBar.style.paddingTop = "12px";
-
-      const cancelBtn = custom.dialogButton("Cancel", theme);
-      cancelBtn.addEventListener("click", () => { closeDialog(false) });
-
-      const saveBtn = custom.dialogButton("Save", theme);
-      saveBtn.addEventListener("click", async () => {
-        await saveConfig();
-        showToast("Configuration saved", "success");
-        closeDialog(true)
-      });
-
-      const applyBtn = custom.dialogButton("Apply", theme);
-      applyBtn.addEventListener("click", async () => {
-        await saveConfig();
-        showToast("Configuration saved", "success")
-      });
-
-      adapter.bindElement(cancelBtn, { background: "background", color: "text" });
-      adapter.bindElement(saveBtn, { background: "background", color: "text" });
-      adapter.bindElement(applyBtn, { background: "background", color: "text" });
-
-      bottomBar.appendChild(cancelBtn);
-      bottomBar.appendChild(saveBtn);
-      bottomBar.appendChild(applyBtn);
-      wrapper.appendChild(bottomBar);
-
-      contentContainer.appendChild(wrapper);
+      addBtn.addEventListener("remove", () => btnAdapter.destroy());
+      wrapper.appendChild(addBtn)
     };
 
-    // --- 列表条目 ---
+    // 删除选中项函数
+    const deleteSelectedItems = async () => {
+      if (selectedItems.size === 0) {
+        showToast("No items selected", "error");
+        return
+      };
 
-    function createListItem(category, id, entry) {
-      const key = `${category}:${id}`;
-      const wrapper = document.createElement("div");
-      wrapper.style.cssText = "position:relative;padding:10px 14px;border:none;border-radius:6px;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:10px;";
-      adapter.bindElement(wrapper, { background: "background" });
+      if (!confirm(`Delete ${selectedItems.size} selected item(s)?`)) return;
 
-      // 内容容器
-      const content = document.createElement("div");
-      content.style.cssText = "display:flex;align-items:center;justify-content:space-between;flex:1;overflow:hidden;";
-
-      const modelName = getModelName(entry.Model);
-      const nameEl = document.createElement("span");
-      nameEl.style.cssText = "font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
-      nameEl.textContent = modelName || "Unnamed Model";
-      adapter.bindElement(nameEl, { color: "text" });
-
-      const tagsPreview = document.createElement("span");
-      tagsPreview.style.cssText = "font-size:11px;opacity:0.6;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-left:12px;";
-      tagsPreview.textContent = entry.Tags
-        ? entry.Tags.substring(0, 25) + (entry.Tags.length > 25 ? "..." : "")
-        : "No tags";
-      adapter.bindElement(tagsPreview, { color: "text" });
-
-      content.appendChild(nameEl);
-      content.appendChild(tagsPreview);
-      wrapper.appendChild(content);
-
-      // 存储引用
-      listItemElements.set(key, wrapper);
-
-      // 悬浮提示
-      const tooltip = document.createElement("div");
-      tooltip.style.cssText = "position:fixed;padding:12px 16px;font-size:12px;line-height:1.5;border-radius:8px;z-index:10002;opacity:0;visibility:hidden;transition:opacity 0.2s,visibility 0.2s;max-width:300px;word-wrap:break-word;pointer-events:none;";
-      tooltip.textContent = entry.Tags || "No tags set";
-      adapter.bindElement(tooltip, {
-        background: "primary",
-        color: "text",
-        border: (t) => `1px solid ${t.border}`,
-        boxShadow: (t) => `0 4px 16px ${hexToRgba(t.shadow, 0.4)}`
-      });
-      document.body.appendChild(tooltip);
-
-      wrapper.addEventListener("mouseenter", () => {
-        if (!selectMode) { wrapper.style.borderColor = theme.prompt };
-        const rect = wrapper.getBoundingClientRect();
-        tooltip.style.left = (rect.right + 10) + "px";
-        tooltip.style.top = rect.top + "px";
-        tooltip.style.opacity = "1";
-        tooltip.style.visibility = "visible"
+      const itemsToDelete = Array.from(selectedItems).map(key => {
+        const [cat, id] = key.split(":");
+        return { category: cat, id }
       });
 
-      wrapper.addEventListener("mouseleave", () => {
-        if (!selectMode) { wrapper.style.borderColor = theme.border };
-        tooltip.style.opacity = "0";
-        tooltip.style.visibility = "hidden"
-      });
+      const success = db.deleteBatch(itemsToDelete);
+      if (success) {
+        selectedItems.clear();
+        updateRemoveButtonVisibility();
+        await saveConfig();
+        showToast(`Deleted ${itemsToDelete.length} items`, "success");
+        renderList()
+      }
+    };
 
-      wrapper.addEventListener("click", () => {
-        if (selectMode) {
-          toggleItemSelection(category, id)
+    // 切换选择模式
+    const toggleSelectMode = () => {
+      selectMode = !selectMode;
+      if (!selectMode) {
+        selectedItems.clear();
+        updateRemoveButtonVisibility()
+      };
+      updateSelectButtonState();
+      renderList()
+    };
+
+    const updateSelectButtonState = () => {
+      const selectBtn = document.querySelector('[data-role="select-toggle-btn"]');
+      if (selectBtn) {
+        selectBtn.textContent = selectMode ? "Done" : "Select"
+      }
+    };
+
+    const updateRemoveButtonVisibility = () => {
+      const removeBtn = document.querySelector('[data-role="remove-selected-btn"]');
+      if (removeBtn) {
+        const hasSelection = selectMode && selectedItems.size > 0;
+        removeBtn.style.display = hasSelection ? "flex" : "none"
+      }
+    };
+
+    // 初始渲染
+    renderList();
+
+    // 构建对话框
+    const builder = new DialogBuilder(DIALOG_TYPE.CUSTOM)
+      .setTitle("Tags Manager")
+      .setContent(content)
+      .setCloseOnOverlayClick(true)
+      .setCloseOnEsc(true)
+      .setCloseButton(false)
+      .setSize("480px", "90vw", "85vh");
+
+    // 自定义构建过程
+    const originalBuild = builder._build.bind(builder);
+    builder._build = function() {
+      originalBuild();
+
+      const titleBar = this._elements.titleBar;
+      const titleControls = document.createElement("div");
+      titleControls.style.cssText = "position: absolute; right: 12px; top: 0; bottom: 0; display: flex; align-items: center; gap: 8px; z-index: 10;";
+      titleControls.dataset.role = "title-controls";
+
+      // Remove 按钮
+      const removeBtn = custom.dialogButton("Remove", theme);
+      removeBtn.dataset.role = "remove-selected-btn";
+      removeBtn.style.display = "none";
+      removeBtn.style.padding = "6px 14px";
+      removeBtn.style.fontSize = "12px";
+
+      const removeAdapter = new ComfyThemeAdapter();
+      removeAdapter.bindElement(removeBtn, { background: "background", color: "text" });
+      removeBtn.addEventListener("click", deleteSelectedItems);
+      removeBtn.addEventListener("remove", () => removeAdapter.destroy());
+
+      // Select/Done 按钮
+      const selectBtn = custom.dialogButton("Select", theme);
+      selectBtn.dataset.role = "select-toggle-btn";
+      selectBtn.style.padding = "6px 14px";
+      selectBtn.style.fontSize = "12px";
+      selectBtn.style.minWidth = "70px";
+
+      const selectAdapter = new ComfyThemeAdapter();
+      selectAdapter.bindElement(selectBtn, { background: "background", color: "text" });
+      selectBtn.addEventListener("click", toggleSelectMode);
+      selectBtn.addEventListener("remove", () => selectAdapter.destroy());
+
+      titleControls.appendChild(removeBtn);
+      titleControls.appendChild(selectBtn);
+      titleBar.appendChild(titleControls)
+    };
+
+    builder
+      .addButton("Cancel", "secondary", () => null)
+      .addButton("Save", "secondary", async () => {
+        const hasChanges = await saveFilteredConfig(db);
+        if (hasChanges) {
+          showToast("Configuration saved", "success")
         } else {
-          tooltip.remove();
-          openEditOverlay(category, id, entry)
-        }
+          showToast("No changes to save", "info")
+        };
+
+        return true
+      })
+      .addButton("Apply", "default", async () => {
+        const hasChanges = await saveFilteredConfig(db);
+        if (hasChanges) {
+          showToast("Configuration applied", "success")
+        } else {
+          showToast("No changes to apply", "info")
+        };
+
+        return false
       });
 
-      // 初始化视觉状态
-      if (selectMode) { updateItemVisual(category, id) };
-
-      return wrapper
+    const cleanup = () => {
+      adapter.destroy();
+      listItemElements.forEach((el) => {
+        if (el._cleanup) el._cleanup()
+      })
     };
 
-    // --- 编辑覆盖层 ---
+    return builder.open().finally(() => {
+      setTimeout(cleanup, 300)
+    })
+  })
+};
 
-    function openEditOverlay(category, id, entry) {
-      const editOverlay = custom.overlay(theme);
-      const editDialog = custom.dialog(theme);
-      const editTitle = custom.dialogTitle("Edit Tags", theme);
+function showAdder() {
+  return new Promise((resolve) => {
+    ensureInitialized().then(() => {
+      const db = getTagsDB();
+      const adapter = new ComfyThemeAdapter();
+      const theme = adapter.theme;
 
-      editDialog.appendChild(editTitle);
+      // 使用 config.js 中的工具函数收集所有模型
+      const modelsByCategory = collectModelsFromGraph(app);
 
-      adapter.bindElement(editDialog, {
-        background: "primary",
-        color: "text",
-        boxShadow: (t) => `0 4px 16px ${hexToRgba(t.shadow, 0.5)}`
-      });
-      adapter.bindElement(editTitle, { background: "title", color: "text" });
+      // 创建内容
+      const content = document.createElement("div");
+      content.style.cssText = "display: flex; flex-direction: column; gap: 24px;";
 
-      // 模型名（只读）
+      // 模型选择
       const modelSection = document.createElement("div");
       const modelRow = custom.container(theme);
       const modelLabel = custom.sectionLabel("model", theme);
       const modelWrapper = custom.controlWrapper(theme);
-      const modelDisplay = document.createElement("div");
-      modelDisplay.style.fontSize = "13px";
-      modelDisplay.style.padding = "0 20px";
-      modelDisplay.style.userSelect = "none";
-      modelDisplay.textContent = entry.Model || "Unknown";
 
-      modelSection.style.marginBottom = "24px";
+      const modelSelector = document.createElement("select");
+      modelSelector.className = "a1r-selector" + (adapter.isClassic ? " classic" : " modern");
+      modelSelector.dataset.role = "model-selector";
 
-      adapter.bindElement(modelLabel, { color: "text" });
-      adapter.bindElement(modelDisplay, { color: "text" });
+      const baseStyle = adapter.isClassic ? {
+        width: "100%",
+        height: "100%",
+        border: "none",
+        borderRadius: "0px",
+        outline: "none",
+        padding: "0 8px",
+        fontSize: "13px",
+        fontWeight: "400",
+        cursor: "pointer",
+        fontFamily: "Courier New, monospace",
+        background: "transparent"
+      } : {
+        width: "100%",
+        height: "100%",
+        border: "none",
+        borderRadius: "6px",
+        outline: "none",
+        padding: "0 20px",
+        fontSize: "14px",
+        fontWeight: "500",
+        cursor: "pointer"
+      };
 
-      modelWrapper.appendChild(modelDisplay);
+      Object.assign(modelSelector.style, baseStyle, {
+        background: "transparent",
+        color: theme.text
+      });
+
+      modelSection.style.marginBottom = "0";
+
+      // 添加默认选项
+      const defaultOption = document.createElement("option");
+      defaultOption.value = "";
+      defaultOption.textContent = "-- Select Model --";
+      defaultOption.style.background = theme.primary;
+      modelSelector.appendChild(defaultOption);
+
+      // 按类别排序渲染
+      const sortedCategories = Array.from(modelsByCategory.entries())
+        .sort(([a], [b]) => a.localeCompare(b));
+
+      sortedCategories.forEach(([category, modelsMap]) => {
+        const group = document.createElement("optgroup");
+        group.label = category.charAt(0).toUpperCase() + category.slice(1);
+
+        const sortedModels = Array.from(modelsMap.entries())
+          .sort(([a, metaA], [b, metaB]) => metaA.name.localeCompare(metaB.name));
+
+        sortedModels.forEach(([modelPath, metadata]) => {
+          const option = document.createElement("option");
+          option.value = modelPath;
+          option._modelMetadata = metadata;
+          option.dataset.widgetName = metadata.widgetName || "";
+          option.dataset.category = metadata.getCategory();
+          option.dataset.nodeType = metadata.getNodeType();
+          option.textContent = metadata.getDisplayName();
+          option.style.background = theme.primary;
+
+          group.appendChild(option)
+        });
+
+        if (group.children.length > 0) {
+          modelSelector.appendChild(group)
+        }
+      });
+
+      // 焦点效果
+      modelSelector.addEventListener("focus", () => {
+        modelWrapper.style.outline = `1px solid ${theme.text}`
+      });
+      modelSelector.addEventListener("blur", () => {
+        modelWrapper.style.outline = "none"
+      });
+
+      const modelLabelAdapter = new ComfyThemeAdapter();
+      modelLabelAdapter.bindElement(modelLabel, { color: "text" });
+
+      const selectorAdapter = new ComfyThemeAdapter();
+      selectorAdapter.bindElement(modelSelector, { background: "background", color: "text" });
+
+      modelWrapper.appendChild(modelSelector);
       modelRow.appendChild(modelLabel);
       modelRow.appendChild(modelWrapper);
       modelSection.appendChild(modelRow);
-      editDialog.appendChild(modelSection);
+      content.appendChild(modelSection);
 
-      // Tags 编辑
+      // 模型信息展示
+      const modelInfoDisplay = document.createElement("div");
+      modelInfoDisplay.style.cssText = "font-size: 11px; opacity: 0.6; margin-top: -16px; padding-left: 80px; min-height: 16px;";
+      modelInfoDisplay.textContent = "";
+
+      const infoAdapter = new ComfyThemeAdapter();
+      infoAdapter.bindElement(modelInfoDisplay, { color: "text" });
+
+      modelSelector.addEventListener("change", () => {
+        const selectedOption = modelSelector.selectedOptions[0];
+        if (selectedOption?._modelMetadata) {
+          const meta = selectedOption._modelMetadata;
+          modelInfoDisplay.textContent = `Category: ${meta.getCategory()} | Type: ${meta.getNodeType()}`
+        } else {
+          modelInfoDisplay.textContent = ""
+        }
+      });
+
+      content.appendChild(modelInfoDisplay);
+
+      // 标签输入
       const tagsSection = document.createElement("div");
       const tagsRow = custom.container(theme);
       const tagsLabel = custom.sectionLabel("tags", theme);
       const tagsWrapper = custom.controlWrapper(theme);
       const tagsTextarea = custom.textarea(theme);
 
-      tagsSection.style.marginBottom = "24px";
+      tagsSection.style.marginBottom = "0";
       tagsRow.style.alignItems = "flex-start";
       tagsWrapper.style.padding = "8px 12px";
-
-      adapter.bindElement(tagsLabel, { color: "text" });
-      adapter.bindElement(tagsTextarea, { background: "background", color: "text" });
+      tagsTextarea.placeholder = "Enter trigger words or tags for this model...";
       tagsTextarea.spellcheck = false;
-      tagsTextarea.value = entry.Tags || "";
       tagsTextarea.style.resize = "none";
+
+      const tagsLabelAdapter = new ComfyThemeAdapter();
+      tagsLabelAdapter.bindElement(tagsLabel, { color: "text" });
+
+      const textareaAdapter = new ComfyThemeAdapter();
+      textareaAdapter.bindElement(tagsTextarea, { background: "background", color: "text" });
 
       tagsWrapper.appendChild(tagsTextarea);
       tagsRow.appendChild(tagsLabel);
       tagsRow.appendChild(tagsWrapper);
       tagsSection.appendChild(tagsRow);
-      editDialog.appendChild(tagsSection);
+      content.appendChild(tagsSection);
 
-      // 按钮
-      const editBottomBar = custom.dialogButtonBar();
-      const editCancelBtn = custom.dialogButton("Cancel", theme);
-      const editSaveBtn = custom.dialogButton("Save", theme);
+      // 构建对话框
+      const builder = new DialogBuilder(DIALOG_TYPE.FORM)
+        .setTitle("Add New Model")
+        .setContent(content)
+        .setCloseOnOverlayClick(true)
+        .setCloseOnEsc(true)
+        .setCloseButton(false)
+        .setSize("400px")
+        .addButton("Cancel", "secondary", () => {
+          resolve(false);
+          return null;
+        })
+        .addButton("Add", "primary", async () => {
+          const modelPath = modelSelector.value;
 
-      editCancelBtn.style.flex = "1";
-      editSaveBtn.style.flex = "1";
-      editSaveBtn.style.fontWeight = "500";
+          if (!modelPath) {
+            showToast("Please select a model", "error");
+            return false
+          };
 
-      adapter.bindElement(editCancelBtn, { background: "background", color: "text" });
-      adapter.bindElement(editSaveBtn, { background: (t) => hexToRgba(t.prompt, 0.2), color: "text" });
+          const selectedOption = modelSelector.selectedOptions[0];
+          const metadata = selectedOption?._modelMetadata || new ModelMetadata(modelPath);
+          const tags = tagsTextarea.value || "";
 
-      function closeEditOverlay() {
-        if (editOverlay.parentNode) { document.body.removeChild(editOverlay) }
+          const result = db.add(metadata, tags);
+
+          if (!result) {
+            showToast("Failed to add model (may already exist)", "error");
+            return false
+          };
+
+          await saveConfig();
+          showToast(`Added ${metadata.getDisplayName()} to ${result.category}`, "success");
+          resolve(true);
+          return true
+        });
+
+      setTimeout(() => modelSelector.focus(), 80);
+
+      // 清理适配器
+      const cleanup = () => {
+        adapter.destroy();
+        modelLabelAdapter.destroy();
+        selectorAdapter.destroy();
+        infoAdapter.destroy();
+        tagsLabelAdapter.destroy();
+        textareaAdapter.destroy()
       };
 
-      editCancelBtn.addEventListener("click", closeEditOverlay);
-
-      editSaveBtn.addEventListener("click", async () => {
-        updateEntry(category, id, entry.Model, tagsTextarea.value);
-        await saveConfig();
-        showToast("Tags updated", "success");
-        closeEditOverlay();
-        renderList()
-      });
-
-      editBottomBar.appendChild(editCancelBtn);
-      editBottomBar.appendChild(editSaveBtn);
-      editDialog.appendChild(editBottomBar);
-
-      editOverlay.appendChild(editDialog);
-      document.body.appendChild(editOverlay);
-
-      editOverlay.addEventListener("click", (e) => { if (e.target === editOverlay) closeEditOverlay() });
-      const editOnEsc = (e) => {
-        if (e.key === "Escape") {
-          closeEditOverlay();
-          document.removeEventListener("keydown", editOnEsc)
-        }
-      };
-      document.addEventListener("keydown", editOnEsc);
-
-      setTimeout(() => {
-        tagsTextarea.focus();
-        tagsTextarea.setSelectionRange(tagsTextarea.value.length, tagsTextarea.value.length)
-      }, 80)
-    };
-
-    // --- 初始化 ---
-
-    updateTitleButtons();
-    renderList();
-
-    // --- 显示窗口 ---
-
-    overlay.appendChild(dialog);
-    document.body.appendChild(overlay);
-
-    // 关闭窗口
-    function closeDialog(saved) {
-      if (overlay.parentNode) { document.body.removeChild(overlay) };
-      adapter.destroy();
-      resolve(saved)
-    };
-
-    overlay.addEventListener("click", (e) => { if (e.target === overlay) closeDialog(false) });
-    const onEsc = (e) => {
-      if (e.key === "Escape") {
-        closeDialog(false);
-        document.removeEventListener("keydown", onEsc)
-      }
-    };
-    document.addEventListener("keydown", onEsc)
+      builder.onClose(cleanup);
+      builder.open()
+    })
   })
 };
 
-function showAdder() {
+// ========== 辅助组件 ==========
+
+function createModelSection(modelList, currentModel, onChange) {
   const adapter = new ComfyThemeAdapter();
-  let theme = adapter.theme;
+  const isClassic = adapter.isClassic;
+  const theme = adapter.theme;
 
-  return new Promise((resolve) => {
+  const section = custom.container(theme);
+  section.style.alignItems = "center";
+  section.style.gap = isClassic ? "8px" : "12px";
 
-    // --- 窗口 ---
+  const label = custom.sectionLabel("model", theme);
+  label.style.width = isClassic ? "70px" : "80px";
+  label.style.flexShrink = "0";
+  if (isClassic) {
+    label.style.textTransform = "uppercase";
+    label.style.letterSpacing = "0.5px";
+  }
 
-    const overlay = custom.overlay(theme);
-    const dialog = custom.dialog(theme);
-    const title = custom.dialogTitle("Add New Model", theme);
+  const wrapper = custom.controlWrapper(theme);
+  wrapper.style.flex = "1";
+  wrapper.style.minHeight = isClassic ? "28px" : "32px";
+  wrapper.style.margin = "0";
 
-    dialog.appendChild(title);
+  const selector = custom.selector(theme);
+  selector.dataset.role = "model-selector";
+  selector.style.background = "transparent";
 
-    // 主题适配
-    adapter.bindElement(dialog, {
-      background: "primary",
-      color: "text",
-      boxShadow: (t) => `0 4px 16px ${hexToRgba(t.shadow, 0.5)}`
-    });
+  const defaultOption = document.createElement("option");
+  defaultOption.value = "";
+  defaultOption.textContent = "-- Select a model --";
+  defaultOption.style.background = theme.primary;
+  selector.appendChild(defaultOption);
 
-    adapter.bindElement(title, { color: "text", background: "title" });
-    adapter.onThemeChange((newTheme) => { theme = newTheme });
+  modelList.forEach((modelName) => {
+    const option = document.createElement("option");
+    option.value = modelName;
+    option.textContent = modelName;
+    option.style.background = theme.primary;
+    selector.appendChild(option);
+  });
 
-    // --- 内容 ---
+  if (currentModel) selector.value = currentModel;
 
-    // 模型选择
-    const modelSection = document.createElement("div");
-    const modelRow = custom.container(theme);
-    const modelLabel = custom.sectionLabel("model", theme);
-    const modelWrapper = custom.controlWrapper(theme);
-    const modelSelector = custom.selector(theme);
-    const defaultOption = document.createElement("option");
-    defaultOption.value = "";
-    defaultOption.textContent = "-- Select Model --";
+  // 焦点效果
+  selector.addEventListener("focus", () => {
+    wrapper.style.outline = `1px solid ${theme.text}`;
+  });
+  selector.addEventListener("blur", () => {
+    wrapper.style.outline = "none";
+  });
+  selector.addEventListener("change", () => onChange(selector.value));
 
-    modelSection.style.marginBottom = "24px";
+  wrapper.appendChild(selector);
+  section.appendChild(label);
+  section.appendChild(wrapper);
 
-    const allModels = new Map();
-    if (app.graph?._nodes) {
-      app.graph._nodes.forEach(node => {
-        if (isModelLoaderNode(node)) {
-          const models = getModelListFromNode(node);
-          const wName = getModelWidgetName(node);
-          models.forEach(m => { if (!allModels.has(m)) allModels.set(m, wName) });
-        }
-      });
-    }
+  // 清理适配器
+  section.addEventListener("remove", () => adapter.destroy());
 
-    Array.from(allModels.entries()).sort(([a], [b]) => a.localeCompare(b)).forEach(([m, wName]) => {
-      const opt = document.createElement("option");
-      opt.value = m;
-      opt.dataset.widgetName = wName;
-      opt.textContent = m;
-      modelSelector.appendChild(opt);
-    });
-
-    modelSelector.appendChild(defaultOption);
-    modelWrapper.appendChild(modelSelector);
-    modelRow.appendChild(modelLabel);
-    modelRow.appendChild(modelWrapper);
-    modelSection.appendChild(modelRow);
-    dialog.appendChild(modelSection);
-
-    adapter.bindElement(modelLabel, { color: "text" });
-    adapter.bindElement(modelSelector, { background: "background", color: "text" });
-
-    // 标签输入
-    const tagsSection = document.createElement("div");
-    const tagsRow = custom.container(theme);
-    const tagsLabel = custom.sectionLabel("tags", theme);
-    const tagsWrapper = custom.controlWrapper(theme);
-    const tagsTextarea = custom.textarea(theme);
-
-    tagsSection.style.marginBottom = "24px";
-    tagsRow.style.alignItems = "flex-start";
-    tagsWrapper.style.padding = "8px 12px";
-    tagsTextarea.placeholder = "";
-    tagsTextarea.spellcheck = false;
-    tagsTextarea.style.resize = "none";
-
-    tagsWrapper.appendChild(tagsTextarea);
-    tagsRow.appendChild(tagsLabel);
-    tagsRow.appendChild(tagsWrapper);
-    tagsSection.appendChild(tagsRow);
-    dialog.appendChild(tagsSection);
-
-    adapter.bindElement(tagsLabel, { color: "text" });
-    adapter.bindElement(tagsTextarea, { background: "background", color: "text" });
-
-    // --- 底部按钮 ---
-
-    const bottomBar = custom.dialogButtonBar();
-    const cancelBtn = custom.dialogButton("Cancel", theme);
-    const addBtn = custom.dialogButton("Add", theme);
-
-    cancelBtn.style.flex = "1";
-    cancelBtn.addEventListener("click", () => closeDialog(false));
-    addBtn.style.flex = "1";
-    addBtn.style.fontWeight = "500";
-
-    // 点击事件
-    function closeDialog(saved) {
-      if (overlay.parentNode) document.body.removeChild(overlay);
-      adapter.destroy();
-      resolve(saved)
-    };
-
-    addBtn.addEventListener("click", async () => {
-      const model = modelSelector.value;
-      if (!model) {
-        showToast("Please select a model", "error");
-        return
-      }
-
-      const selectedOption = modelSelector.selectedOptions[0];
-      const widgetName = selectedOption?.dataset.widgetName || "";
-      const category = getModelCategory(model, widgetName);
-      addEntry(category, model, tagsTextarea.value);
-      await saveConfig();
-      showToast("Model added", "success");
-      closeDialog(true)
-    });
-
-    bottomBar.appendChild(cancelBtn);
-    bottomBar.appendChild(addBtn);
-    dialog.appendChild(bottomBar);
-
-    adapter.bindElement(cancelBtn, { background: "background", color: "text" });
-    adapter.bindElement(addBtn, { background: (t) => hexToRgba(t.prompt, 0.2), color: "text" });
-
-    // --- 显示窗口 ---
-    overlay.appendChild(dialog);
-    document.body.appendChild(overlay);
-
-    // 关闭窗口
-    overlay.addEventListener("click", (e) => { if (e.target === overlay) closeDialog(false); });
-    const onEsc = (e) => { if (e.key === "Escape") { closeDialog(false); document.removeEventListener("keydown", onEsc); } };
-    document.addEventListener("keydown", onEsc);
-
-    // 聚焦输入框
-    setTimeout(() => modelSelector.focus(), 80)
-  })
+  return section;
 };
 
-// ========== 辅助函数 ==========
+function createTagSection(initialValue) {
+  const adapter = new ComfyThemeAdapter();
+  const isClassic = adapter.isClassic;
+  const theme = adapter.theme;
 
-function getModelName(fullName) {
-  if (!fullName) return "unknown";
+  const section = custom.container(theme);
+  section.style.alignItems = "flex-start";
+  section.style.gap = isClassic ? "8px" : "12px";
+  section.style.flex = "1";
+  section.style.minHeight = "0";
 
-  const parts = fullName.split(/[\/\\]/);
+  const label = custom.sectionLabel("tags", theme);
+  label.style.width = isClassic ? "70px" : "80px";
+  label.style.flexShrink = "0";
+  label.style.marginTop = isClassic ? "6px" : "8px";
+  if (isClassic) {
+    label.style.textTransform = "uppercase";
+    label.style.letterSpacing = "0.5px";
+  }
 
-  return parts[parts.length - 1]
+  const wrapper = custom.controlWrapper(theme);
+  wrapper.style.flex = "1";
+  wrapper.style.display = "flex";
+  wrapper.style.alignItems = "stretch";
+  wrapper.style.minHeight = isClassic ? "80px" : "120px";
+  wrapper.style.padding = isClassic ? "4px 6px" : "8px 12px";
+  wrapper.style.margin = "0";
+
+  const textarea = custom.textarea(theme);
+  textarea.dataset.role = "tags-textarea";
+  textarea.value = initialValue;
+  textarea.placeholder = "";
+  textarea.spellcheck = false;
+  textarea.style.resize = "none";
+  textarea.style.minHeight = "100px";
+
+  textarea.addEventListener("focus", () => {
+    wrapper.style.outline = `1px solid ${theme.text}`;
+  });
+  textarea.addEventListener("blur", () => {
+    wrapper.style.outline = "none";
+  });
+
+  wrapper.appendChild(textarea);
+  section.appendChild(label);
+  section.appendChild(wrapper);
+
+  // 自动聚焦
+  setTimeout(() => {
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  }, 100);
+
+  section.addEventListener("remove", () => adapter.destroy());
+
+  return section;
 };
 
-function getModelCategory(modelPath, widgetName) {
-  if (!modelPath) return "unknown";
-
-  if (widgetName) {
-    const wn = widgetName.toLowerCase();
-    if (wn.includes("ckpt") || wn.includes("checkpoint")) return "checkpoints";
-    if (wn.includes("lora")) return "loras";
-    if (wn.includes("unet")) return "unets";
-    if (wn.includes("vae")) return "vaes";
-    if (wn.includes("clip")) return "clips";
-    if (wn.includes("controlnet")) return "controlnets";
-    if (wn.includes("ipadapter")) return "ipadapters";
-    if (wn.includes("upscale")) return "upscalers"
+function createCategoryHeader(category, itemCount, initialExpanded, theme, isClassic, entriesContainer, stateMap) {
+  const adapter = new ComfyThemeAdapter();
+  
+  const header = document.createElement("div");
+  header.dataset.role = "category-header";
+  
+  // 布局样式
+  const baseStyle = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: isClassic ? "6px 10px" : "8px 12px",
+    borderRadius: isClassic ? "0px" : "6px",
+    cursor: "pointer",
+    userSelect: "none",
+    transition: "outline 0.15s ease, background-color 0.15s ease, opacity 0.15s ease",
+    outline: "2px solid transparent",
+    outlineOffset: "-2px",
+    gap: "12px",
+    background: "transparent"
   };
   
-  const parts = modelPath.split(/[\/\\]/);
-  const firstDir = parts[0]?.toLowerCase() || "unknown";
-  const lower = modelPath.toLowerCase();
+  Object.assign(header.style, baseStyle);
 
-  if (lower.includes("lora") || lower.includes("lycoris")) return "loras";
-  if (lower.includes("checkpoint") || lower.includes("checkpoints")) return "checkpoints";
-  if (lower.includes("unet")) return "unets";
-  if (lower.includes("vae")) return "vaes";
-  if (lower.includes("clip")) return "clips";
-  if (lower.includes("controlnet")) return "controlnets";
-  if (lower.includes("ipadapter")) return "ipadapters";
-  if (lower.includes("upscale")) return "upscalers";
+  // 主题样式绑定
+  adapter.bindElement(header, {
+    color: "text"
+  });
 
-  if (firstDir.includes("lora") || firstDir.includes("lycoris")) return "loras";
-  if (firstDir.includes("checkpoint")) return "checkpoints";
-  if (firstDir.includes("unet")) return "unets";
-  if (firstDir.includes("vae")) return "vaes";
-  if (firstDir.includes("clip")) return "clips";
-  if (firstDir.includes("controlnet")) return "controlnets";
-  if (firstDir.includes("ipadapter")) return "ipadapters";
-  if (firstDir.includes("upscale")) return "upscalers";
+  // 左侧：三角形 + 类别名
+  const leftSection = document.createElement("div");
+  leftSection.style.cssText = "display: flex; align-items: center; gap: 10px; flex: 1; overflow: hidden;";
 
-  return "unknown"
-};
+  // 三角形指示器 - 使用SVG实现更精确的圆角三角形
+  const triangleWrapper = document.createElement("div");
+  triangleWrapper.style.cssText = `
+    width: 14px;
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transform: ${initialExpanded ? 'rotate(90deg)' : 'rotate(0deg)'};
+  `;
 
-function getModelWidgetName(node) {
-  const modelWidget = node.widgets?.find(w =>
-    w.type === "combo" &&
-    (w.name === "ckpt_name" ||
-      w.name === "model_name" ||
-      w.name === "lora_name" ||
-      w.name === "unet_name" ||
-      w.name === "clip_name" ||
-      w.name === "vae_name" ||
-      w.name === "controlnet_name" ||
-      w.name === "ipadapter_name" ||
-      w.name === "upscale_name" ||
-      w.name.includes("model") ||
-      w.name.includes("checkpoint")
-    )
-  );
+  // 使用内联SVG绘制圆角三角形
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(svgNS, "svg");
+  svg.setAttribute("width", "10");
+  svg.setAttribute("height", "10");
+  svg.setAttribute("viewBox", "0 0 10 10");
+  svg.style.cssText = "display: block;";
 
-  return modelWidget?.name || ""
-}
+  // 圆角三角形路径（朝右）
+  const path = document.createElementNS(svgNS, "path");
+  // 绘制一个圆角三角形：起点(1,1) -> (9,5) -> (1,9) 带圆角
+  path.setAttribute("d", "M2 1.5 L8 5 L2 8.5 Q1.5 9 1 8.5 Q0.5 8 1 7.5 L5 5 L1 2.5 Q0.5 2 1 1.5 Q1.5 1 2 1.5 Z");
+  path.setAttribute("fill", "currentColor");
+  svg.appendChild(path);
 
-function getModelFromNode(node) {
-  const modelWidget = node.widgets?.find(w =>
-    w.type === "combo" &&
-    (w.name === "ckpt_name" ||
-      w.name === "model_name" ||
-      w.name === "lora_name" ||
-      w.name === "unet_name" ||
-      w.name === "clip_name" ||
-      w.name === "vae_name" ||
-      w.name.includes("model") ||
-      w.name.includes("checkpoint")
-    )
-  );
+  triangleWrapper.appendChild(svg);
 
-  return modelWidget?.value || ""
-};
+  // 类别文本
+  const label = document.createElement("span");
+  label.style.cssText = `
+    font-size: ${isClassic ? "11px" : "12px"};
+    font-weight: ${isClassic ? "600" : "600"};
+    text-transform: uppercase;
+    letter-spacing: ${isClassic ? "0.5px" : "1px"};
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: ${isClassic ? "Courier New, monospace" : "system-ui"};
+  `;
+  label.textContent = category;
 
-function getModelListFromNode(node) {
-  const modelWidget = node.widgets?.find(w =>
-    w.type === "combo" &&
-    (w.name === "ckpt_name" ||
-      w.name === "model_name" ||
-      w.name === "lora_name" ||
-      w.name === "unet_name" ||
-      w.name === "clip_name" ||
-      w.name === "vae_name" ||
-      w.name.includes("model") ||
-      w.name.includes("checkpoint")
-    )
-  );
+  leftSection.appendChild(triangleWrapper);
+  leftSection.appendChild(label);
 
-  if (modelWidget?.options?.values) {
-    const values = Array.from(modelWidget.options.values)
-      ? modelWidget.options.values
-      : modelWidget.options.values();
+  // 右侧：数量徽章
+  const badge = document.createElement("span");
+  badge.style.cssText = `
+    font-size: ${isClassic ? "10px" : "11px"};
+    font-weight: 500;
+    padding: ${isClassic ? "2px 6px" : "2px 8px"};
+    border-radius: ${isClassic ? "0px" : "10px"};
+    background: ${hexToRgba(theme.text, 0.15)};
+    flex-shrink: 0;
+  `;
+  badge.textContent = itemCount;
 
-    return values
+  header.appendChild(leftSection);
+  header.appendChild(badge);
+
+  // 当前展开状态（闭包变量）
+  let isExpanded = initialExpanded;
+
+  // 切换函数
+  const toggle = () => {
+    isExpanded = !isExpanded;
+    stateMap.set(category, isExpanded);
+    
+    // 旋转三角形
+    triangleWrapper.style.transform = isExpanded ? 'rotate(90deg)' : 'rotate(0deg)';
+    
+    // 更新aria状态
+    header.setAttribute("aria-expanded", isExpanded.toString());
+
+    if (isExpanded) {
+      // 展开动画
+      
+      // 先移除maxHeight限制以测量实际高度
+      entriesContainer.style.maxHeight = "none";
+      entriesContainer.style.visibility = "visible";
+      
+      const targetHeight = entriesContainer.scrollHeight;
+      
+      // 设置起始状态
+      entriesContainer.style.maxHeight = "0px";
+      entriesContainer.style.opacity = "0";
+      entriesContainer.style.marginTop = "0px";
+      
+      // 强制同步布局
+      entriesContainer.offsetHeight; // 触发重排
+      
+      // 设置目标状态
+      entriesContainer.style.maxHeight = targetHeight + "px";
+      entriesContainer.style.opacity = "1";
+      entriesContainer.style.marginTop = "4px";
+      
+      // 动画结束后清理maxHeight
+      const onTransitionEnd = (e) => {
+        if (e.propertyName === 'max-height' && isExpanded) {
+          entriesContainer.style.maxHeight = "none";
+          entriesContainer.removeEventListener('transitionend', onTransitionEnd)
+        }
+      };
+      entriesContainer.addEventListener('transitionend', onTransitionEnd)
+    } else {
+      // 收起动画
+      
+      // 先固定当前高度
+      const currentHeight = entriesContainer.scrollHeight;
+      entriesContainer.style.maxHeight = currentHeight + "px";
+      entriesContainer.style.opacity = "1";
+      entriesContainer.style.marginTop = "4px";
+      entriesContainer.style.visibility = "visible";
+      
+      // 强制同步布局
+      entriesContainer.offsetHeight; // 触发重排
+      
+      // 动画到收起状态
+      entriesContainer.style.maxHeight = "0px";
+      entriesContainer.style.opacity = "0";
+      entriesContainer.style.marginTop = "0px";
+      
+      // 动画结束后隐藏（防止可聚焦元素被tab到）
+      const onTransitionEnd = (e) => {
+        if (e.propertyName === 'max-height' && !isExpanded) {
+          entriesContainer.style.visibility = "hidden";
+          entriesContainer.removeEventListener('transitionend', onTransitionEnd)
+        }
+      };
+      entriesContainer.addEventListener('transitionend', onTransitionEnd)
+    }
   };
 
-  return []
+  // 交互效果
+  header.addEventListener("mouseenter", () => {
+    header.style.backgroundColor = hexToRgba(theme.title, 0.8)
+  });
+  header.addEventListener("mouseleave", () => {
+    header.style.backgroundColor = "transparent";
+    header.style.outline = "2px solid transparent"
+  });
+
+  // 点击切换
+  header.addEventListener("click", (e) => {
+    e.stopPropagation();
+    toggle()
+  });
+
+  // 点击时的outline效果（使用文本颜色）
+  header.addEventListener("mousedown", () => {
+    header.style.outline = `2px solid ${theme.text}`
+  });
+  header.addEventListener("mouseup", () => {
+    // 保持outline直到mouseleave，或立即清除
+    setTimeout(() => {
+      header.style.outline = "2px solid transparent"
+    }, 150)
+  });
+
+  // 键盘支持
+  header.setAttribute("tabindex", "0");
+  header.setAttribute("role", "button");
+  header.setAttribute("aria-expanded", isExpanded.toString());
+  header.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggle()
+    }
+  });
+
+  // 清理
+  header.addEventListener("remove", () => {
+    adapter.destroy()
+  });
+
+  return header
 };
 
-function isModelLoaderNode(node) {
-  if (!node) return false;
+function updateListItemVisual(el, key, selectMode, selectedItems, theme) {
+  if (!el) return;
+  
+  if (selectMode && selectedItems.has(key)) {
+    el.style.outline = `2px solid ${theme.prompt}`;
+    el.style.outlineOffset = "0px";
+    el.style.background = hexToRgba(theme.prompt, 0.05);
+  } else {
+    el.style.outline = "none";
+    el.style.background = theme.background;
+  }
+};
 
-  if (MODEL_LOADER_CLASSES.includes(node.comfyClass)) return true;
-  if (MODEL_LOADER_CLASSES.includes(node.type)) return true;
+function createListItem(category, id, entry, theme, selectMode, selectedItems, listItemElements, onSelectionChange, db) {
+  const key = `${category}:${id}`;
+  const adapter = new ComfyThemeAdapter();
+  const isClassic = adapter.isClassic;
 
-  const hasModelOutput = node.outputs?.some(output =>
-    ["MODEL", "CLIP", "VAE", "CHECKPOINT", "UNET", "LORA"].includes(output.type)
-  );
+  const wrapper = document.createElement("div");
+  wrapper.style.cssText = "position: relative; padding: 10px 14px; border: none; border-radius: 6px; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 10px;";
+  
+  addButtonHover(wrapper, theme, isClassic ? 0.15 : 0.3);
+  
+  adapter.bindElement(wrapper, { background: "background" });
 
-  const hasModelInput = node.inputs?.some(input =>
-    ["MODEL", "CLIP", "VAE", "CHECKPOINT", "UNET"].includes(input.type)
-  );
+  // 内容
+  const content = document.createElement("div");
+  content.style.cssText = "display: flex; align-items: center; justify-content: space-between; flex: 1; overflow: hidden;";
 
-  return hasModelOutput || hasModelInput;
+  const getModelName = new ModelMetadata(entry.Model).getDisplayName();
+  const nameEl = document.createElement("span");
+  nameEl.style.cssText = "font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;";
+  nameEl.textContent = getModelName || "Unnamed Model";
+
+  const nameAdapter = new ComfyThemeAdapter();
+  nameAdapter.bindElement(nameEl, { color: "text" });
+
+  const tagsPreview = document.createElement("span");
+  tagsPreview.style.cssText = "font-size: 11px; opacity: 0.6; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 12px;";
+  
+  const getTagsPreview = () => {
+    const tags = entry.Tags || "";
+    return tags ? tags.substring(0, 25) + (tags.length > 25 ? "..." : "") : "No tags"
+  };
+  
+  tagsPreview.textContent = getTagsPreview();
+
+  const previewAdapter = new ComfyThemeAdapter();
+  previewAdapter.bindElement(tagsPreview, { color: "text" });
+
+  content.appendChild(nameEl);
+  content.appendChild(tagsPreview);
+  wrapper.appendChild(content);
+
+  // 存储引用
+  listItemElements.set(key, wrapper);
+
+  // 悬浮提示
+  const tooltipAdapter = new ComfyThemeAdapter();
+  const tooltip = document.createElement("div");
+  tooltip.style.cssText = "position: fixed; padding: 12px 16px; font-size: 12px; line-height: 1.5; border-radius: 8px; z-index: 10002; opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; max-width: 300px; word-wrap: break-word; pointer-events: none;";
+  
+  const getTooltipText = () => {
+    const tags = entry.Tags || "";
+    return tags.trim() || "No tags set"
+  };
+  
+  tooltip.textContent = getTooltipText();
+
+  tooltipAdapter.bindElement(tooltip, {
+    background: "primary",
+    color: "text",
+    border: (t) => `1px solid ${t.border}`,
+    boxShadow: (t) => `0 4px 16px ${hexToRgba(t.shadow, 0.4)}`
+  });
+  document.body.appendChild(tooltip);
+
+  let tooltipVisible = false;
+
+  const showTooltip = () => {
+    if (selectMode) return;
+
+    tooltip.textContent = getTooltipText();
+    const rect = wrapper.getBoundingClientRect();
+    tooltip.style.left = (rect.right + 10) + "px";
+    tooltip.style.top = rect.top + "px";
+    tooltip.style.opacity = "1";
+    tooltip.style.visibility = "visible";
+    tooltipVisible = true
+  };
+
+  const hideTooltip = () => {
+    tooltip.style.opacity = "0";
+    tooltip.style.visibility = "hidden";
+    tooltipVisible = false
+  };
+
+  wrapper.addEventListener("mouseenter", () => {
+    if (!selectMode) {
+      wrapper.style.borderColor = theme.prompt;
+      showTooltip()
+    }
+  });
+
+  wrapper.addEventListener("mouseleave", () => {
+    if (!selectMode) {
+      wrapper.style.borderColor = theme.border;
+      hideTooltip()
+    }
+  });
+
+  // 点击事件
+  wrapper.addEventListener("click", () => {
+    if (selectMode) {
+      // 切换选择状态
+      if (selectedItems.has(key)) {
+        selectedItems.delete(key)
+      } else {
+        selectedItems.add(key)
+      }
+      // 实时更新视觉状态
+      updateListItemVisual(wrapper, key, selectMode, selectedItems, theme);
+
+      if (onSelectionChange) { onSelectionChange() }
+    } else {
+      // 非选择模式：打开编辑覆盖层
+      hideTooltip();
+      openEditOverlay(category, id, entry, db, (updatedCategory, updatedId, updatedEntry) => {
+        tagsPreview.textContent = getTagsPreview()
+      })
+    }
+  });
+
+  // 初始化选择状态
+  if (selectMode && selectedItems.has(key)) {
+    wrapper.style.outline = `2px solid ${theme.prompt}`;
+    wrapper.style.outlineOffset = "0px";
+    wrapper.style.background = hexToRgba(theme.prompt, 0.05)
+  };
+
+  wrapper._cleanup = () => {
+    adapter.destroy();
+    if (tooltip.parentNode) { tooltip.remove() };
+    tooltipAdapter.destroy();
+    nameAdapter.destroy();
+    previewAdapter.destroy()
+  };
+
+  // 清理
+  wrapper.addEventListener("remove", wrapper._cleanup);
+
+  return wrapper
+};
+
+function openEditOverlay(category, id, entry, db, onUpdateCallback) {
+  const adapter = new ComfyThemeAdapter();
+  const theme = adapter.theme;
+
+  // 创建内容
+  const content = document.createElement("div");
+  content.style.cssText = "display: flex; flex-direction: column; gap: 24px;";
+
+  // 模型名（只读）
+  const modelSection = document.createElement("div");
+  const modelRow = custom.container(theme);
+  const modelLabel = custom.sectionLabel("model", theme);
+  const modelWrapper = custom.controlWrapper(theme);
+  const modelDisplay = document.createElement("div");
+  modelDisplay.style.cssText = "font-size: 13px; padding: 0 20px; user-select: none;";
+  modelDisplay.textContent = entry.Model || "Unknown";
+
+  modelSection.style.marginBottom = "0";
+
+  const labelAdapter = new ComfyThemeAdapter();
+  labelAdapter.bindElement(modelLabel, { color: "text" });
+
+  const displayAdapter = new ComfyThemeAdapter();
+  displayAdapter.bindElement(modelDisplay, { color: "text" });
+
+  modelWrapper.appendChild(modelDisplay);
+  modelRow.appendChild(modelLabel);
+  modelRow.appendChild(modelWrapper);
+  modelSection.appendChild(modelRow);
+  content.appendChild(modelSection);
+
+  // Tags 编辑
+  const tagsSection = document.createElement("div");
+  const tagsRow = custom.container(theme);
+  const tagsLabel = custom.sectionLabel("tags", theme);
+  const tagsWrapper = custom.controlWrapper(theme);
+  const tagsTextarea = custom.textarea(theme);
+
+  tagsSection.style.marginBottom = "0";
+  tagsRow.style.alignItems = "flex-start";
+  tagsWrapper.style.padding = "8px 12px";
+
+  const tagsLabelAdapter = new ComfyThemeAdapter();
+  tagsLabelAdapter.bindElement(tagsLabel, { color: "text" });
+
+  const textareaAdapter = new ComfyThemeAdapter();
+  textareaAdapter.bindElement(tagsTextarea, { background: "background", color: "text" });
+
+  tagsTextarea.spellcheck = false;
+  tagsTextarea.value = entry.Tags || "";
+  tagsTextarea.style.resize = "none";
+
+  tagsWrapper.appendChild(tagsTextarea);
+  tagsRow.appendChild(tagsLabel);
+  tagsRow.appendChild(tagsWrapper);
+  tagsSection.appendChild(tagsRow);
+  content.appendChild(tagsSection);
+
+  // 构建对话框 - 使用传入的 db 进行操作
+  const builder = new DialogBuilder(DIALOG_TYPE.FORM)
+    .setTitle("Edit Tags")
+    .setContent(content)
+    .setCloseOnOverlayClick(true)
+    .setCloseOnEsc(true)
+    .setCloseButton(false)
+    .setSize("400px")
+    .addButton("Cancel", "secondary", () => {
+      labelAdapter.destroy();
+      displayAdapter.destroy();
+      tagsLabelAdapter.destroy();
+      textareaAdapter.destroy();
+      adapter.destroy();
+      return null
+    })
+    .addButton("Save", "secondary", async () => {
+      const newTags = tagsTextarea.value || "";
+      // 使用 db.update 替代 updateEntry
+      const success = db.update(category, id, entry.Model, newTags);
+      
+      if (!success) {
+        showToast("Failed to update tags", "error");
+        return false
+      };
+
+      await saveConfig();
+
+      entry.Tags = newTags;
+
+      if (onUpdateCallback) {
+        onUpdateCallback(category, id, entry)
+      };
+      
+      showToast("Tags updated", "success");
+
+      labelAdapter.destroy();
+      displayAdapter.destroy();
+      tagsLabelAdapter.destroy();
+      textareaAdapter.destroy();
+      adapter.destroy();
+
+      return true
+    });
+
+  // 自动聚焦
+  setTimeout(() => {
+    tagsTextarea.focus();
+    tagsTextarea.setSelectionRange(tagsTextarea.value.length, tagsTextarea.value.length)
+  }, 100);
+
+  return builder.open()
 };
 
 // ========== 队列拦截 ==========
 
 function setupQueueInterceptor() {
   const originalQueuePrompt = app.queuePrompt;
-  
+
   app.queuePrompt = async function(number, batchCount) {
-    const embeddingTags = collectEmbeddingTags();
-    
-    if (embeddingTags.length > 0) {
-      app._pendingEmbeddingTags = embeddingTags;
-      console.log("[Embedding Tags] Collected for queue:", embeddingTags.map(t => 
-        `${getBaseModelName(t.model)}: ${t.text.substring(0, 50)}...`
-      ))
-    }
+    ensureInitialized().then(() => {
+      const db = getTagsDB();
+      const embeddingTags = collectEmbeddingTags(db);
+      if (embeddingTags.length > 0) {
+        app._pendingEmbeddingTags = embeddingTags;
+        console.log("[Embedding Tags] Collected for queue:", embeddingTags.map(t =>
+          `${new ModelMetadata(t.model).getDisplayName()}: ${t.text.substring(0, 50)}...`
+        ))
+      }
+    });
     
     return originalQueuePrompt.call(this, number, batchCount)
   };
-  
+
   const originalGraphToPrompt = app.graphToPrompt;
   app.graphToPrompt = async function() {
     const result = await originalGraphToPrompt.call(this);
-    
-    if (app._pendingEmbeddingTags && app._pendingEmbeddingTags.length > 0) {
+    if (app._pendingEmbeddingTags?.length > 0) {
       injectTagsIntoPrompt(result, app._pendingEmbeddingTags);
       delete app._pendingEmbeddingTags
     };
-    
     return result
   }
 };
 
-function collectEmbeddingTags() {
+function collectEmbeddingTags(db) {
   const tags = [];
-  
-  if (!app.graph || !app.graph._nodes) return tags;
-  
+  if (!app.graph?._nodes) return tags;
+
   for (const node of app.graph._nodes) {
     if (!isModelLoaderNode(node)) continue;
     
     const currentModel = getModelFromNode(node);
     if (!currentModel) continue;
-    
-    const tagEntry = findEntry(currentModel);
-    if (tagEntry) {
+
+    const entry = db.findByModelName(currentModel);
+    if (entry) {
       tags.push({
         nodeId: node.id,
         nodeType: node.comfyClass || node.type,
         model: currentModel,
-        text: tagEntry.entry.Tags,
-        entryId: tagEntry.id,
-        category: tagEntry.category
+        text: entry.entry.Tags,
+        entryId: entry.id,
+        category: entry.category
       })
     }
   };
-  
+
   return tags
-};
+}
 
 function injectTagsIntoPrompt(promptData, embeddingTags) {
   if (!promptData.output) return;
-  
+
   for (const tagData of embeddingTags) {
     const connectedNodes = findConnectedTextEncodeNodes(promptData, tagData.nodeId);
-    
     for (const textEncodeId of connectedNodes) {
       const node = promptData.output[textEncodeId];
       if (!node || node.class_type !== "CLIPTextEncode") continue;
-      
+
       let currentText = node.inputs?.text || "";
-      
       if (!currentText.includes(tagData.text)) {
         const newText = tagData.text + (currentText ? ", " + currentText : "");
         node.inputs.text = newText;
@@ -1192,23 +1297,22 @@ function findConnectedTextEncodeNodes(promptData, modelNodeId) {
   const connectedNodes = [];
   const visited = new Set();
   const queue = [modelNodeId];
-  
+
   while (queue.length > 0) {
     const currentId = queue.shift();
     if (visited.has(currentId)) continue;
     visited.add(currentId);
-    
+
     const node = promptData.output[currentId];
     if (!node) continue;
-    
+
     if (node.class_type === "CLIPTextEncode") {
       connectedNodes.push(currentId);
       continue
     };
-    
+
     for (const [otherId, otherNode] of Object.entries(promptData.output)) {
       if (visited.has(otherId)) continue;
-      
       for (const inputValue of Object.values(otherNode.inputs || {})) {
         if (Array.isArray(inputValue) && inputValue[0] === currentId) {
           queue.push(otherId);
@@ -1217,7 +1321,7 @@ function findConnectedTextEncodeNodes(promptData, modelNodeId) {
       }
     }
   };
-  
+
   return connectedNodes
 };
 
@@ -1227,19 +1331,16 @@ app.registerExtension({
   name: "a1rworkshop.modeltag",
 
   async setup() {
-    await loadConfig();
-    setupQueueInterceptor();
+    await initConfig();
+    setupQueueInterceptor()
   },
 
   getNodeMenuItems(node) {
     if (!isModelLoaderNode(node)) return [];
-
-    return [
-      {
-        content: "Open Embedding Editor",
-        callback: async () => { showDialog(node) }
-      }
-    ];
+    return [{
+      content: "Open Embedding Editor",
+      callback: async () => { showEditor(node) }
+    }]
   },
 
   getCanvasMenuItems(canvas) {
@@ -1247,45 +1348,45 @@ app.registerExtension({
       null,
       {
         content: "Open Embedding Manager",
-        callback: async () => { showEditor() }
+        callback: async () => { showManager() }
       }
-    ];
+    ]
   },
 
   async nodeCreated(node) {
     if (!isModelLoaderNode(node)) return;
 
     const originalOnDrawForeground = node.onDrawForeground;
-    node.onDrawForeground = function (ctx) {
+    node.onDrawForeground = function(ctx) {
       if (originalOnDrawForeground) {
-        originalOnDrawForeground.apply(this, arguments);
+        originalOnDrawForeground.apply(this, arguments)
       };
 
+      if (!isInitialized) return;
+
       const currentModel = getModelFromNode(node);
-      const hasTags = findEntry(currentModel) !== null;
+      const hasTags = getTagsDB().findByModelName(currentModel) !== null;
 
       if (hasTags) {
         ctx.save();
-        
         const tagText = "TAGS";
         ctx.font = "bold 11px sans-serif";
         const tagWidth = ctx.measureText(tagText).width + 16;
         const tagHeight = 20;
         const x = this.size[0] - tagWidth - 8;
         const y = 8;
-        
+
         ctx.fillStyle = "#4CAF50";
         ctx.beginPath();
         ctx.roundRect(x, y, tagWidth, tagHeight, 4);
         ctx.fill();
-        
+
         ctx.fillStyle = "#ffffff";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.fillText(tagText, x + tagWidth / 2, y + tagHeight / 2);
-        
-        ctx.restore();
+        ctx.restore()
       }
     }
   }
-});
+})

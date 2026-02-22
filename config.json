@@ -1,7 +1,8 @@
 {
   "EmbeddingTags": {
-    "checkpoints": {},
-    "loras": {},
-    "others": {}
+    "checkpoints": {
+    },
+    "loras": {
+    }
   }
 }
