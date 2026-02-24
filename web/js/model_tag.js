@@ -19,102 +19,18 @@ async function ensureInitialized() {
   }
 };
 
+const EDITOR_MODE = {
+  NODE_CONTEXT: 'node_context',
+  MANAGER_EDIT: 'manager_edit',
+  MANAGER_ADD: 'manager_add'
+};
+
 // ========== 主对话框 ==========
 
 function showEditor(node) {
-  ensureInitialized().then(() => {
-    const db = getTagsDB();
-    const modelList = getModelListFromNode(node) || [];
-    let currentModel = getModelFromNode(node);
-    let currentWidgetName = getModelWidgetName(node);
-    
-    // 使用 ModelMetadata 获取准确类别
-    let currentMetadata = currentModel 
-      ? new ModelMetadata(currentModel, node, currentWidgetName)
-      : null;
-    
-    let currentEntry = currentMetadata 
-      ? db.getOrCreate(currentModel, currentWidgetName, node)
-      : null;
-
-    // 创建内容容器
-    const content = document.createElement("div");
-    content.style.cssText = "display: flex; flex-direction: column; gap: 16px; width: 100%;";
-
-    // 模型选择区域
-    const modelSection = createModelSection(modelList, currentModel, (selectedModel) => {
-      currentModel = selectedModel;
-      currentMetadata = new ModelMetadata(selectedModel, node, currentWidgetName);
-      currentEntry = db.getOrCreate(selectedModel, currentWidgetName, node);
-      
-      const textarea = content.querySelector('[data-role="tags-textarea"]');
-      if (textarea) textarea.value = currentEntry.entry.Tags || "";
-    });
-
-    // 标签输入区域
-    const tagSection = createTagSection(currentEntry?.entry.Tags || "");
-
-    content.appendChild(modelSection);
-    content.appendChild(tagSection);
-
-    // 使用 DialogBuilder 创建对话框
-    const builder = new DialogBuilder(DIALOG_TYPE.FORM)
-      .setTitle("Embedding Tags Editor")
-      .setContent(content)
-      .setCloseOnOverlayClick(true)
-      .setCloseOnEsc(true)
-      .setCloseButton(false)
-      .addCustomHeaderButton("Open Manager", "secondary", () => { showManager(); })
-      .addButton("Cancel", "secondary", () => null)
-      .addButton("Save", "secondary", async () => {
-        const selector = content.querySelector('[data-role="model-selector"]');
-        const textarea = content.querySelector('[data-role="tags-textarea"]');
-        const model = selector?.value || "";
-        const tags = textarea?.value || "";
-
-        if (!model) {
-          showToast("Please select a model first", "error");
-          return false
-        };
-
-        // 使用 ModelMetadata 确保类别准确
-        const metadata = new ModelMetadata(model, node, currentWidgetName);
-        
-        if (currentEntry?.id) {
-          db.update(currentEntry.category, currentEntry.id, model, tags)
-        } else {
-          db.add(metadata, tags)
-        };
-
-        await saveConfig();
-        showToast("Saved for " + metadata.getDisplayName(), "success");
-        return true;
-      }, { autoFocus: true })
-      .addButton("Apply", "default", async () => {
-        const selector = content.querySelector('[data-role="model-selector"]');
-        const textarea = content.querySelector('[data-role="tags-textarea"]');
-        const model = selector?.value || "";
-        const tags = textarea?.value || "";
-
-        if (!model) {
-          showToast("Please select a model first", "error");
-          return false
-        };
-
-        const metadata = new ModelMetadata(model, node, currentWidgetName);
-        
-        if (currentEntry?.id) {
-          db.update(currentEntry.category, currentEntry.id, model, tags);
-        } else {
-          db.add(metadata, tags)
-        };
-
-        await saveConfig();
-        showToast("Configuration applied", "success");
-        return false
-      });
-
-    return builder.open()
+  return createTagsEditor({
+    mode: EDITOR_MODE.NODE_CONTEXT,
+    node: node
   })
 };
 
@@ -213,8 +129,17 @@ function showManager() {
           const item = createListItem(
             category, id, entry, theme,
             selectMode, selectedItems, listItemElements,
-            updateRemoveButtonVisibility, db
+            () => updateRemoveButtonVisibility(), db,
+            () => {
+              createTagsEditor({
+                mode: EDITOR_MODE.MANAGER_EDIT,
+                entry: entry,
+                category: category,
+                onSave: () => { renderList() }
+              })
+            }
           );
+
           entriesContainer.appendChild(item)
         });
 
@@ -226,7 +151,7 @@ function showManager() {
       if (totalValidEntries === 0) {
         const emptyMsg = document.createElement("div");
         emptyMsg.style.cssText = "text-align: center; padding: 40px 20px; opacity: 0.6; font-style: italic;";
-        emptyMsg.textContent = "";// 输入框提示，没想好先空着
+        emptyMsg.textContent = "No models with tags found.";// 输入框提示
 
         const msgAdapter = new ComfyThemeAdapter();
         msgAdapter.bindElement(emptyMsg, { color: "text" });
@@ -260,8 +185,10 @@ function showManager() {
         addBtn.style.opacity = "0.6"
       });
       addBtn.addEventListener("click", async () => {
-        const added = await showAdder();
-        if (added) renderList()
+        await createTagsEditor({
+          mode: EDITOR_MODE.MANAGER_ADD,
+          onSave: () => { renderList() }
+        })
       });
 
       addBtn.addEventListener("remove", () => btnAdapter.destroy());
@@ -328,7 +255,8 @@ function showManager() {
       .setCloseOnOverlayClick(true)
       .setCloseOnEsc(true)
       .setCloseButton(false)
-      .setSize("480px", "90vw", "85vh");
+      .setSize("480px", "90vw", "85vh")
+      .setAutoFocus(false);
 
     // 自定义构建过程
     const originalBuild = builder._build.bind(builder);
@@ -381,7 +309,7 @@ function showManager() {
 
         return true
       })
-      .addButton("Apply", "default", async () => {
+      .addButton("Apply", "secondary", async () => {
         const hasChanges = await saveFilteredConfig(db);
         if (hasChanges) {
           showToast("Configuration applied", "success")
@@ -405,221 +333,200 @@ function showManager() {
   })
 };
 
-function showAdder() {
+// ========== 辅助组件 ==========
+
+function createTagsEditor(options = {}) {
+  const {
+    mode = EDITOR_MODE.NODE_CONTEXT,
+    node = null,
+    entry = null,
+    category = null,
+    onSave = null,
+    onClose = null
+  } = options;
+
   return new Promise((resolve) => {
     ensureInitialized().then(() => {
       const db = getTagsDB();
       const adapter = new ComfyThemeAdapter();
       const theme = adapter.theme;
 
-      // 使用 config.js 中的工具函数收集所有模型
-      const modelsByCategory = collectModelsFromGraph(app);
-
-      // 创建内容
-      const content = document.createElement("div");
-      content.style.cssText = "display: flex; flex-direction: column; gap: 24px;";
-
-      // 模型选择
-      const modelSection = document.createElement("div");
-      const modelRow = custom.container(theme);
-      const modelLabel = custom.sectionLabel("model", theme);
-      const modelWrapper = custom.controlWrapper(theme);
-
-      const modelSelector = document.createElement("select");
-      modelSelector.className = "a1r-selector" + (adapter.isClassic ? " classic" : " modern");
-      modelSelector.dataset.role = "model-selector";
-
-      const baseStyle = adapter.isClassic ? {
-        width: "100%",
-        height: "100%",
-        border: "none",
-        borderRadius: "0px",
-        outline: "none",
-        padding: "0 8px",
-        fontSize: "13px",
-        fontWeight: "400",
-        cursor: "pointer",
-        fontFamily: "Courier New, monospace",
-        background: "transparent"
-      } : {
-        width: "100%",
-        height: "100%",
-        border: "none",
-        borderRadius: "6px",
-        outline: "none",
-        padding: "0 20px",
-        fontSize: "14px",
-        fontWeight: "500",
-        cursor: "pointer"
+      let config = {
+        title: "",
+        showManagerButton: false,
+        allowModelSelect: false,
+        currentModel: "",
+        initialTags: "",
+        modelList: []
       };
 
-      Object.assign(modelSelector.style, baseStyle, {
-        background: "transparent",
-        color: theme.text
+      switch (mode) {
+        case EDITOR_MODE.NODE_CONTEXT:
+          config = {
+            title: "Embedding Tags Editor",
+            showManagerButton: true,
+            allowModelSelect: true,
+            currentModel: getModelFromNode(node) || '',
+            initialTags: '',
+            modelList: getModelListFromNode(node) || []
+          };
+
+          if (config.currentModel) {
+            const existing = db.findByModelName(config.currentModel);
+            
+            if (existing) {
+              config.initialTags = existing.Tags || ''
+            }
+          };
+
+          break;
+        case EDITOR_MODE.MANAGER_EDIT:
+          config = {
+            title: "Edit Tags",
+            showManagerButton: false,
+            allowModelSelect: false,
+            currentModel: entry?.Model || '',
+            initialTags: entry?.Tags || '',
+            modelList: []
+          };
+
+          break;
+        case EDITOR_MODE.MANAGER_ADD:
+          config = {
+            title: "Add New Model",
+            showManagerButton: false,
+            allowModelSelect: true,
+            currentModel: '',
+            initialTags: '',
+            modelList: []
+          };
+
+          const modelsByCategory = collectModelsFromGraph(app);
+          modelsByCategory.forEach((modelsMap, cat) => {
+            modelsMap.forEach((metadata, path) => {
+              config.modelList.push({
+                path: path,
+                displayName: metadata.getDisplayName(),
+                metadata: metadata,
+                group: cat
+              })
+            })
+          });
+
+          config.modelList.sort((a, b) => {
+            if (a.group !== b.group) { return a.group.localeCompare(b.group); }
+            return a.displayName.localeCompare(b.displayName)
+          });
+
+          break;
+      };
+
+      const content = document.createElement("div");
+      content.style.cssText = "display: flex; flex-direction: column; gap: 16px; width: 100%;";
+
+      const modelSection = createModelSection({
+        modelList: config.modelList,
+        currentModel: config.currentModel,
+        onChange: config.allowModelSelect ? (value) => {
+          const existing = db.findByModelName(value);
+          const textarea = content.querySelector('[data-role="tags-textarea"]');
+          if (textarea) {
+            textarea.value = existing ? existing.entry.Tags || '' : ''
+          }
+        } : null,
+
+        mode: config.allowModelSelect ? 'select' : 'display',
+        displayValue: config.currentModel
       });
 
-      modelSection.style.marginBottom = "0";
-
-      // 添加默认选项
-      const defaultOption = document.createElement("option");
-      defaultOption.value = "";
-      defaultOption.textContent = "-- Select Model --";
-      defaultOption.style.background = theme.primary;
-      modelSelector.appendChild(defaultOption);
-
-      // 按类别排序渲染
-      const sortedCategories = Array.from(modelsByCategory.entries())
-        .sort(([a], [b]) => a.localeCompare(b));
-
-      sortedCategories.forEach(([category, modelsMap]) => {
-        const group = document.createElement("optgroup");
-        group.label = category.charAt(0).toUpperCase() + category.slice(1);
-
-        const sortedModels = Array.from(modelsMap.entries())
-          .sort(([a, metaA], [b, metaB]) => metaA.name.localeCompare(metaB.name));
-
-        sortedModels.forEach(([modelPath, metadata]) => {
-          const option = document.createElement("option");
-          option.value = modelPath;
-          option._modelMetadata = metadata;
-          option.dataset.widgetName = metadata.widgetName || "";
-          option.dataset.category = metadata.getCategory();
-          option.dataset.nodeType = metadata.getNodeType();
-          option.textContent = metadata.getDisplayName();
-          option.style.background = theme.primary;
-
-          group.appendChild(option)
-        });
-
-        if (group.children.length > 0) {
-          modelSelector.appendChild(group)
-        }
-      });
-
-      // 焦点效果
-      modelSelector.addEventListener("focus", () => {
-        modelWrapper.style.outline = `1px solid ${theme.text}`
-      });
-      modelSelector.addEventListener("blur", () => {
-        modelWrapper.style.outline = "none"
-      });
-
-      const modelLabelAdapter = new ComfyThemeAdapter();
-      modelLabelAdapter.bindElement(modelLabel, { color: "text" });
-
-      const selectorAdapter = new ComfyThemeAdapter();
-      selectorAdapter.bindElement(modelSelector, { background: "background", color: "text" });
-
-      modelWrapper.appendChild(modelSelector);
-      modelRow.appendChild(modelLabel);
-      modelRow.appendChild(modelWrapper);
-      modelSection.appendChild(modelRow);
       content.appendChild(modelSection);
 
-      // 模型信息展示
-      const modelInfoDisplay = document.createElement("div");
-      modelInfoDisplay.style.cssText = "font-size: 11px; opacity: 0.6; margin-top: -16px; padding-left: 80px; min-height: 16px;";
-      modelInfoDisplay.textContent = "";
-
-      const infoAdapter = new ComfyThemeAdapter();
-      infoAdapter.bindElement(modelInfoDisplay, { color: "text" });
-
-      modelSelector.addEventListener("change", () => {
-        const selectedOption = modelSelector.selectedOptions[0];
-        if (selectedOption?._modelMetadata) {
-          const meta = selectedOption._modelMetadata;
-          modelInfoDisplay.textContent = `Category: ${meta.getCategory()} | Type: ${meta.getNodeType()}`
-        } else {
-          modelInfoDisplay.textContent = ""
-        }
+      const tagSection = createTagSection({
+        initialValue: config.initialTags
       });
 
-      content.appendChild(modelInfoDisplay);
+      content.appendChild(tagSection);
 
-      // 标签输入
-      const tagsSection = document.createElement("div");
-      const tagsRow = custom.container(theme);
-      const tagsLabel = custom.sectionLabel("tags", theme);
-      const tagsWrapper = custom.controlWrapper(theme);
-      const tagsTextarea = custom.textarea(theme);
-
-      tagsSection.style.marginBottom = "0";
-      tagsRow.style.alignItems = "flex-start";
-      tagsWrapper.style.padding = "8px 12px";
-      tagsTextarea.placeholder = "Enter trigger words or tags for this model...";
-      tagsTextarea.spellcheck = false;
-      tagsTextarea.style.resize = "none";
-
-      const tagsLabelAdapter = new ComfyThemeAdapter();
-      tagsLabelAdapter.bindElement(tagsLabel, { color: "text" });
-
-      const textareaAdapter = new ComfyThemeAdapter();
-      textareaAdapter.bindElement(tagsTextarea, { background: "background", color: "text" });
-
-      tagsWrapper.appendChild(tagsTextarea);
-      tagsRow.appendChild(tagsLabel);
-      tagsRow.appendChild(tagsWrapper);
-      tagsSection.appendChild(tagsRow);
-      content.appendChild(tagsSection);
-
-      // 构建对话框
       const builder = new DialogBuilder(DIALOG_TYPE.FORM)
-        .setTitle("Add New Model")
+        .setTitle(config.title)
         .setContent(content)
         .setCloseOnOverlayClick(true)
         .setCloseOnEsc(true)
         .setCloseButton(false)
-        .setSize("400px")
-        .addButton("Cancel", "secondary", () => {
-          resolve(false);
-          return null;
-        })
-        .addButton("Add", "primary", async () => {
-          const modelPath = modelSelector.value;
+        .setAutoFocus(false);
+      
+      if (config.showManagerButton) {
+        builder.addCustomHeaderButton("Open Manager", "secondary", () => { showManager() })
+      };
 
-          if (!modelPath) {
-            showToast("Please select a model", "error");
-            return false
+      builder
+        .addButton("Cancel", "secondary", () => {
+          if (onClose) onClose();
+          return null
+        })
+        .addButton("Save", "secondary", async () => {
+          const tags = content.querySelector('[data-role="tags-textarea"]').value || '';
+          let model = config.currentModel;
+          let metadata = null;
+
+          if (config.allowModelSelect) {
+            const selector = content.querySelector('[data-role="model-selector"]');
+            model = selector.value || '';
+
+            if (!model) {
+              showToast("Please select a model", "error");
+              return false
+            };
+
+            const selectedOption = selector?.selectedOptions[0];
+            metadata = selectedOption?._modelMetadata || new ModelMetadata(model)
+          } else {
+            metadata = new ModelMetadata(config.currentModel);
+            if (category) metadata._category = category
           };
 
-          const selectedOption = modelSelector.selectedOptions[0];
-          const metadata = selectedOption?._modelMetadata || new ModelMetadata(modelPath);
-          const tags = tagsTextarea.value || "";
+          const existing = db.findByModelName(model);
+          let result;
 
-          const result = db.add(metadata, tags);
+          if (existing) {
+            result = db.update(existing.category, existing.id, model, tags)
+          } else {
+            result = db.add(metadata, tags)
+          };
 
-          if (!result) {
-            showToast("Failed to add model (may already exist)", "error");
+          if (!result && !existing) {
+            showToast("Failed to save", "error");
             return false
           };
 
           await saveConfig();
-          showToast(`Added ${metadata.getDisplayName()} to ${result.category}`, "success");
-          resolve(true);
+          showToast("Saved for " + metadata.getDisplayName(), "success");
+
+          if (onSave) onSave({ model, tags, category: metadata.getCategory() });
           return true
         });
 
-      setTimeout(() => modelSelector.focus(), 80);
-
-      // 清理适配器
-      const cleanup = () => {
+      builder.onClose(() => {
         adapter.destroy();
-        modelLabelAdapter.destroy();
-        selectorAdapter.destroy();
-        infoAdapter.destroy();
-        tagsLabelAdapter.destroy();
-        textareaAdapter.destroy()
-      };
+        if (onClose) onClose()
+      });
 
-      builder.onClose(cleanup);
-      builder.open()
+      builder.open().then(resolve)
     })
   })
-};
+}
 
-// ========== 辅助组件 ==========
 
-function createModelSection(modelList, currentModel, onChange) {
+function createModelSection(options = {}) {
+  const {
+    modelList = [],
+    currentModel = '',
+    onChange = null,
+    readOnly = false,
+    displayValue = '',
+    mode = 'select' // 'select' | 'display'
+  } = options;
+
   const adapter = new ComfyThemeAdapter();
   const isClassic = adapter.isClassic;
   const theme = adapter.theme;
@@ -633,54 +540,130 @@ function createModelSection(modelList, currentModel, onChange) {
   label.style.flexShrink = "0";
   if (isClassic) {
     label.style.textTransform = "uppercase";
-    label.style.letterSpacing = "0.5px";
-  }
+    label.style.letterSpacing = "0.5px"
+  };
 
-  const wrapper = custom.controlWrapper(theme);
-  wrapper.style.flex = "1";
-  wrapper.style.minHeight = isClassic ? "28px" : "32px";
-  wrapper.style.margin = "0";
+  if (mode === 'display' || readOnly) {
+    // 只读显示模式
+    const wrapper = custom.controlWrapper(theme);
+    wrapper.style.flex = "1";
+    wrapper.style.minHeight = isClassic ? "28px" : "32px";
+    wrapper.style.margin = "0";
+    wrapper.style.cursor = "default";
+    
+    // 移除hover效果
+    wrapper.addEventListener("mouseenter", (e) => {
+      e.stopPropagation();
+      wrapper.style.borderColor = theme.border
+    });
 
-  const selector = custom.selector(theme);
-  selector.dataset.role = "model-selector";
-  selector.style.background = "transparent";
+    const display = document.createElement("div");
+    display.style.cssText = `
+      font-size: ${isClassic ? "13px" : "14px"};
+      padding: 0 ${isClassic ? "8px" : "20px"};
+      user-select: none;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      line-height: ${isClassic ? "26px" : "30px"};
+      font-family: ${isClassic ? "Courier New, monospace" : "system-ui"};
+    `;
+    display.textContent = displayValue || currentModel;
 
-  const defaultOption = document.createElement("option");
-  defaultOption.value = "";
-  defaultOption.textContent = "-- Select a model --";
-  defaultOption.style.background = theme.primary;
-  selector.appendChild(defaultOption);
+    wrapper.appendChild(display);
+    section.appendChild(label);
+    section.appendChild(wrapper)
+  } else {
+    // 选择模式
+    const wrapper = custom.controlWrapper(theme);
+    wrapper.style.flex = "1";
+    wrapper.style.minHeight = isClassic ? "28px" : "32px";
+    wrapper.style.margin = "0";
 
-  modelList.forEach((modelName) => {
-    const option = document.createElement("option");
-    option.value = modelName;
-    option.textContent = modelName;
-    option.style.background = theme.primary;
-    selector.appendChild(option);
-  });
+    const selector = document.createElement("select");
+    selector.className = "a1r-selector" + (isClassic ? " classic" : " modern");
+    selector.dataset.role = "model-selector";
+    selector.style.cssText = isClassic ? `
+      width: 100%;
+      height: 100%;
+      border: none;
+      border-radius: 0px;
+      outline: none;
+      padding: 0 8px;
+      font-size: 13px;
+      font-weight: 400;
+      cursor: pointer;
+      font-family: Courier New, monospace;
+      background: transparent;
+      color: ${theme.text};
+    ` : `
+      width: 100%;
+      height: 100%;
+      border: none;
+      border-radius: 6px;
+      outline: none;
+      padding: 0 20px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      background: transparent;
+      color: ${theme.text};
+    `;
 
-  if (currentModel) selector.value = currentModel;
+    // 添加默认选项
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "";
+    defaultOption.textContent = "-- Select a model --";
+    defaultOption.style.background = theme.primary;
+    selector.appendChild(defaultOption);
 
-  // 焦点效果
-  selector.addEventListener("focus", () => {
-    wrapper.style.outline = `1px solid ${theme.text}`;
-  });
-  selector.addEventListener("blur", () => {
-    wrapper.style.outline = "none";
-  });
-  selector.addEventListener("change", () => onChange(selector.value));
+    // 添加模型列表
+    modelList.forEach((modelName) => {
+      const option = document.createElement("option");
+      option.value = typeof modelName === 'string' ? modelName : modelName.path;
+      option.textContent = typeof modelName === 'string' ? modelName : modelName.displayName;
+      option.style.background = theme.primary;
+      
+      // 保存metadata（如果有）
+      if (typeof modelName === 'object' && modelName.metadata) {
+        option._modelMetadata = modelName.metadata
+      };
+      
+      selector.appendChild(option)
+    });
 
-  wrapper.appendChild(selector);
-  section.appendChild(label);
-  section.appendChild(wrapper);
+    if (currentModel) {
+      selector.value = currentModel
+    };
 
-  // 清理适配器
+    // 焦点效果
+    selector.addEventListener("focus", () => {
+      wrapper.style.outline = `1px solid ${theme.text}`
+    });
+    selector.addEventListener("blur", () => {
+      wrapper.style.outline = "none"
+    });
+    
+    if (onChange) {
+      selector.addEventListener("change", () => onChange(selector.value))
+    };
+
+    wrapper.appendChild(selector);
+    section.appendChild(label);
+    section.appendChild(wrapper)
+  };
+
   section.addEventListener("remove", () => adapter.destroy());
 
-  return section;
+  return section
 };
 
-function createTagSection(initialValue) {
+function createTagSection(options = {}) {
+  const {
+    initialValue = '',
+    placeholder = "text",
+  } = options;
+
   const adapter = new ComfyThemeAdapter();
   const isClassic = adapter.isClassic;
   const theme = adapter.theme;
@@ -697,8 +680,8 @@ function createTagSection(initialValue) {
   label.style.marginTop = isClassic ? "6px" : "8px";
   if (isClassic) {
     label.style.textTransform = "uppercase";
-    label.style.letterSpacing = "0.5px";
-  }
+    label.style.letterSpacing = "0.5px"
+  };
 
   const wrapper = custom.controlWrapper(theme);
   wrapper.style.flex = "1";
@@ -711,31 +694,24 @@ function createTagSection(initialValue) {
   const textarea = custom.textarea(theme);
   textarea.dataset.role = "tags-textarea";
   textarea.value = initialValue;
-  textarea.placeholder = "";
+  textarea.placeholder = placeholder;
   textarea.spellcheck = false;
   textarea.style.resize = "none";
   textarea.style.minHeight = "100px";
 
   textarea.addEventListener("focus", () => {
-    wrapper.style.outline = `1px solid ${theme.text}`;
+    wrapper.style.outline = `1px solid ${theme.text}`
   });
   textarea.addEventListener("blur", () => {
-    wrapper.style.outline = "none";
+    wrapper.style.outline = "none"
   });
 
   wrapper.appendChild(textarea);
   section.appendChild(label);
   section.appendChild(wrapper);
 
-  // 自动聚焦
-  setTimeout(() => {
-    textarea.focus();
-    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-  }, 100);
-
   section.addEventListener("remove", () => adapter.destroy());
-
-  return section;
+  return section
 };
 
 function createCategoryHeader(category, itemCount, initialExpanded, theme, isClassic, entriesContainer, stateMap) {
@@ -951,20 +927,7 @@ function createCategoryHeader(category, itemCount, initialExpanded, theme, isCla
   return header
 };
 
-function updateListItemVisual(el, key, selectMode, selectedItems, theme) {
-  if (!el) return;
-  
-  if (selectMode && selectedItems.has(key)) {
-    el.style.outline = `2px solid ${theme.prompt}`;
-    el.style.outlineOffset = "0px";
-    el.style.background = hexToRgba(theme.prompt, 0.05);
-  } else {
-    el.style.outline = "none";
-    el.style.background = theme.background;
-  }
-};
-
-function createListItem(category, id, entry, theme, selectMode, selectedItems, listItemElements, onSelectionChange, db) {
+function createListItem(category, id, entry, theme, selectMode, selectedItems, listItemElements, onSelectionChange, db, onClick) {
   const key = `${category}:${id}`;
   const adapter = new ComfyThemeAdapter();
   const isClassic = adapter.isClassic;
@@ -1008,46 +971,6 @@ function createListItem(category, id, entry, theme, selectMode, selectedItems, l
   // 存储引用
   listItemElements.set(key, wrapper);
 
-  // 悬浮提示
-  const tooltipAdapter = new ComfyThemeAdapter();
-  const tooltip = document.createElement("div");
-  tooltip.style.cssText = "position: fixed; padding: 12px 16px; font-size: 12px; line-height: 1.5; border-radius: 8px; z-index: 10002; opacity: 0; visibility: hidden; transition: opacity 0.2s, visibility 0.2s; max-width: 300px; word-wrap: break-word; pointer-events: none;";
-  
-  const getTooltipText = () => {
-    const tags = entry.Tags || "";
-    return tags.trim() || "No tags set"
-  };
-  
-  tooltip.textContent = getTooltipText();
-
-  tooltipAdapter.bindElement(tooltip, {
-    background: "primary",
-    color: "text",
-    border: (t) => `1px solid ${t.border}`,
-    boxShadow: (t) => `0 4px 16px ${hexToRgba(t.shadow, 0.4)}`
-  });
-  document.body.appendChild(tooltip);
-
-  let tooltipVisible = false;
-
-  const showTooltip = () => {
-    if (selectMode) return;
-
-    tooltip.textContent = getTooltipText();
-    const rect = wrapper.getBoundingClientRect();
-    tooltip.style.left = (rect.right + 10) + "px";
-    tooltip.style.top = rect.top + "px";
-    tooltip.style.opacity = "1";
-    tooltip.style.visibility = "visible";
-    tooltipVisible = true
-  };
-
-  const hideTooltip = () => {
-    tooltip.style.opacity = "0";
-    tooltip.style.visibility = "hidden";
-    tooltipVisible = false
-  };
-
   wrapper.addEventListener("mouseenter", () => {
     if (!selectMode) {
       wrapper.style.borderColor = theme.prompt;
@@ -1065,156 +988,39 @@ function createListItem(category, id, entry, theme, selectMode, selectedItems, l
   // 点击事件
   wrapper.addEventListener("click", () => {
     if (selectMode) {
-      // 切换选择状态
       if (selectedItems.has(key)) {
         selectedItems.delete(key)
       } else {
         selectedItems.add(key)
-      }
-      // 实时更新视觉状态
+      };
       updateListItemVisual(wrapper, key, selectMode, selectedItems, theme);
-
-      if (onSelectionChange) { onSelectionChange() }
+      if (onSelectionChange) onSelectionChange()
     } else {
-      // 非选择模式：打开编辑覆盖层
-      hideTooltip();
-      openEditOverlay(category, id, entry, db, (updatedCategory, updatedId, updatedEntry) => {
-        tagsPreview.textContent = getTagsPreview()
-      })
+      onClick()
     }
   });
 
-  // 初始化选择状态
-  if (selectMode && selectedItems.has(key)) {
-    wrapper.style.outline = `2px solid ${theme.prompt}`;
-    wrapper.style.outlineOffset = "0px";
-    wrapper.style.background = hexToRgba(theme.prompt, 0.05)
-  };
-
   wrapper._cleanup = () => {
     adapter.destroy();
-    if (tooltip.parentNode) { tooltip.remove() };
-    tooltipAdapter.destroy();
     nameAdapter.destroy();
     previewAdapter.destroy()
   };
 
-  // 清理
   wrapper.addEventListener("remove", wrapper._cleanup);
-
   return wrapper
 };
 
-function openEditOverlay(category, id, entry, db, onUpdateCallback) {
-  const adapter = new ComfyThemeAdapter();
-  const theme = adapter.theme;
-
-  // 创建内容
-  const content = document.createElement("div");
-  content.style.cssText = "display: flex; flex-direction: column; gap: 24px;";
-
-  // 模型名（只读）
-  const modelSection = document.createElement("div");
-  const modelRow = custom.container(theme);
-  const modelLabel = custom.sectionLabel("model", theme);
-  const modelWrapper = custom.controlWrapper(theme);
-  const modelDisplay = document.createElement("div");
-  modelDisplay.style.cssText = "font-size: 13px; padding: 0 20px; user-select: none;";
-  modelDisplay.textContent = entry.Model || "Unknown";
-
-  modelSection.style.marginBottom = "0";
-
-  const labelAdapter = new ComfyThemeAdapter();
-  labelAdapter.bindElement(modelLabel, { color: "text" });
-
-  const displayAdapter = new ComfyThemeAdapter();
-  displayAdapter.bindElement(modelDisplay, { color: "text" });
-
-  modelWrapper.appendChild(modelDisplay);
-  modelRow.appendChild(modelLabel);
-  modelRow.appendChild(modelWrapper);
-  modelSection.appendChild(modelRow);
-  content.appendChild(modelSection);
-
-  // Tags 编辑
-  const tagsSection = document.createElement("div");
-  const tagsRow = custom.container(theme);
-  const tagsLabel = custom.sectionLabel("tags", theme);
-  const tagsWrapper = custom.controlWrapper(theme);
-  const tagsTextarea = custom.textarea(theme);
-
-  tagsSection.style.marginBottom = "0";
-  tagsRow.style.alignItems = "flex-start";
-  tagsWrapper.style.padding = "8px 12px";
-
-  const tagsLabelAdapter = new ComfyThemeAdapter();
-  tagsLabelAdapter.bindElement(tagsLabel, { color: "text" });
-
-  const textareaAdapter = new ComfyThemeAdapter();
-  textareaAdapter.bindElement(tagsTextarea, { background: "background", color: "text" });
-
-  tagsTextarea.spellcheck = false;
-  tagsTextarea.value = entry.Tags || "";
-  tagsTextarea.style.resize = "none";
-
-  tagsWrapper.appendChild(tagsTextarea);
-  tagsRow.appendChild(tagsLabel);
-  tagsRow.appendChild(tagsWrapper);
-  tagsSection.appendChild(tagsRow);
-  content.appendChild(tagsSection);
-
-  // 构建对话框 - 使用传入的 db 进行操作
-  const builder = new DialogBuilder(DIALOG_TYPE.FORM)
-    .setTitle("Edit Tags")
-    .setContent(content)
-    .setCloseOnOverlayClick(true)
-    .setCloseOnEsc(true)
-    .setCloseButton(false)
-    .setSize("400px")
-    .addButton("Cancel", "secondary", () => {
-      labelAdapter.destroy();
-      displayAdapter.destroy();
-      tagsLabelAdapter.destroy();
-      textareaAdapter.destroy();
-      adapter.destroy();
-      return null
-    })
-    .addButton("Save", "secondary", async () => {
-      const newTags = tagsTextarea.value || "";
-      // 使用 db.update 替代 updateEntry
-      const success = db.update(category, id, entry.Model, newTags);
-      
-      if (!success) {
-        showToast("Failed to update tags", "error");
-        return false
-      };
-
-      await saveConfig();
-
-      entry.Tags = newTags;
-
-      if (onUpdateCallback) {
-        onUpdateCallback(category, id, entry)
-      };
-      
-      showToast("Tags updated", "success");
-
-      labelAdapter.destroy();
-      displayAdapter.destroy();
-      tagsLabelAdapter.destroy();
-      textareaAdapter.destroy();
-      adapter.destroy();
-
-      return true
-    });
-
-  // 自动聚焦
-  setTimeout(() => {
-    tagsTextarea.focus();
-    tagsTextarea.setSelectionRange(tagsTextarea.value.length, tagsTextarea.value.length)
-  }, 100);
-
-  return builder.open()
+function updateListItemVisual(el, key, selectMode, selectedItems, theme) {
+  if (!el) return;
+  
+  if (selectMode && selectedItems.has(key)) {
+    el.style.outline = `2px solid ${theme.prompt}`;
+    el.style.outlineOffset = "0px";
+    el.style.background = hexToRgba(theme.prompt, 0.05);
+  } else {
+    el.style.outline = "none";
+    el.style.background = theme.background;
+  }
 };
 
 // ========== 队列拦截 ==========

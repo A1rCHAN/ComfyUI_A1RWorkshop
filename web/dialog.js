@@ -118,7 +118,8 @@ export class DialogBuilder {
     this._isClosing = false;
     this._dialogId = null;
     this._cleanupFns = [];
-  }
+    this.autoFocus = true
+  };
 
   // ========== 链式配置方法 ==========
 
@@ -212,7 +213,7 @@ export class DialogBuilder {
    */
   onOpen(callback) {
     this._onOpen = callback;
-    return this;
+    return this
   };
 
   /**
@@ -220,7 +221,15 @@ export class DialogBuilder {
    */
   onClose(callback) {
     this._onClose = callback;
-    return this;
+    return this
+  };
+
+  /**
+   * 设置自动聚焦
+   */
+  setAutoFocus(flag) {
+    this.autoFocus = !!flag;
+    return this
   };
 
   // ========== 构建方法 ==========
@@ -376,7 +385,9 @@ export class DialogBuilder {
     Object.assign(titleText.style, {
       fontSize: isClassic ? "14px" : "16px",
       fontWeight: isClassic ? "400" : "600",
-      fontFamily: isClassic ? "Courier New, monospace" : "system-ui"
+      fontFamily: isClassic ? "Courier New, monospace" : "system-ui",
+      userSelect: "none",
+      cursor: "default"
     });
 
     if (isClassic) {
@@ -714,10 +725,15 @@ export class DialogBuilder {
     document.body.appendChild(this._elements.overlay);
     this._isOpen = true;
 
-    setTimeout(() => {
-      const focusable = this._elements.dialog.querySelector("button:not([disabled]), input, textarea, select");
-      if (focusable) focusable.focus();
-    }, 50);
+    if (this.autoFocus) {
+      setTimeout(() => {
+        const focusable =
+          this._elements.dialog.querySelector(
+            "button:not([disabled]), input, textarea, select"
+          );
+        if (focusable) focusable.focus()
+      }, 50)
+    }
   };
 
   close(result = null) {
