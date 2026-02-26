@@ -163,27 +163,8 @@ function showManager() {
       content.appendChild(wrapper);
 
       // "+" 按钮
-      const addBtn = document.createElement("button");
-      addBtn.style.cssText = "width: 100%; min-height: 44px; padding: 10px 14px; border: 1px dashed; border-radius: 6px; opacity: 0.6; font-size: 20px; cursor: pointer; transition: all 0.2s; margin-top: 8px; display: flex; align-items: center; justify-content: center;";
-      addBtn.textContent = "+";
+      const addBtn = custom.dashedButton("+", theme);
 
-      const btnAdapter = new ComfyThemeAdapter();
-      btnAdapter.bindElement(addBtn, {
-        borderColor: "border",
-        background: "background",
-        color: "text"
-      });
-
-      addBtn.addEventListener("mouseenter", () => {
-        addBtn.style.borderColor = theme.prompt;
-        addBtn.style.color = theme.prompt;
-        addBtn.style.opacity = "1"
-      });
-      addBtn.addEventListener("mouseleave", () => {
-        addBtn.style.borderColor = theme.border;
-        addBtn.style.color = theme.text;
-        addBtn.style.opacity = "0.6"
-      });
       addBtn.addEventListener("click", async () => {
         await createTagsEditor({
           mode: EDITOR_MODE.MANAGER_ADD,
@@ -191,7 +172,6 @@ function showManager() {
         })
       });
 
-      addBtn.addEventListener("remove", () => btnAdapter.destroy());
       wrapper.appendChild(addBtn)
     };
 
@@ -357,18 +337,32 @@ function createTagsEditor(options = {}) {
         allowModelSelect: false,
         currentModel: "",
         initialTags: "",
-        modelList: []
+        modelList: [],
+        displayValue: ""
       };
 
       switch (mode) {
         case EDITOR_MODE.NODE_CONTEXT:
+          const currentModelPath = getModelFromNode(node) || '';
+          const nodeMetadata = currentModelPath ? new ModelMetadata(currentModelPath, node, getModelWidgetName(node)) : null;
+
           config = {
             title: "Embedding Tags Editor",
             showManagerButton: true,
             allowModelSelect: true,
-            currentModel: getModelFromNode(node) || '',
+            currentModel: currentModelPath,
             initialTags: '',
-            modelList: getModelListFromNode(node) || []
+            modelList: (getModelListFromNode(node) || []).map(path => {
+              const metadata = new ModelMetadata(path, node, getModelWidgetName(node));
+              return {
+                path: path,
+                relativePath: metadata.getRelativePath(),
+                storagePath: metadata.getStoragePath(),
+                managerName: metadata.getManagerDisplayName(),
+                metadata: metadata
+              }
+            }),
+            displayValue: nodeMetadata ? nodeMetadata.getRelativePath() : currentModelPath
           };
 
           if (config.currentModel) {
@@ -381,13 +375,16 @@ function createTagsEditor(options = {}) {
 
           break;
         case EDITOR_MODE.MANAGER_EDIT:
+          const editMetadata = entry?.Model ? new ModelMetadata(entry.Model) : null;
+
           config = {
             title: "Edit Tags",
             showManagerButton: false,
             allowModelSelect: false,
             currentModel: entry?.Model || '',
             initialTags: entry?.Tags || '',
-            modelList: []
+            modelList: [],
+            displayValue: editMetadata ? editMetadata.getRelativePath() : (entry?.Model || '')
           };
 
           break;
@@ -398,15 +395,19 @@ function createTagsEditor(options = {}) {
             allowModelSelect: true,
             currentModel: '',
             initialTags: '',
-            modelList: []
+            modelList: [],
+            displayValue: ''
           };
 
           const modelsByCategory = collectModelsFromGraph(app);
+
           modelsByCategory.forEach((modelsMap, cat) => {
             modelsMap.forEach((metadata, path) => {
               config.modelList.push({
                 path: path,
-                displayName: metadata.getDisplayName(),
+                relativePath: metadata.getRelativePath(),
+                storagePath: metadata.getStoragePath(),
+                managerName: metadata.getManagerDisplayName(),
                 metadata: metadata,
                 group: cat
               })
@@ -414,11 +415,11 @@ function createTagsEditor(options = {}) {
           });
 
           config.modelList.sort((a, b) => {
-            if (a.group !== b.group) { return a.group.localeCompare(b.group); }
-            return a.displayName.localeCompare(b.displayName)
+            if (a.group !== b.group) return a.group.localeCompare(b.group);
+            return (a.relativePath || '').localeCompare(b.relativePath || '')
           });
 
-          break;
+          break
       };
 
       const content = document.createElement("div");
@@ -436,7 +437,7 @@ function createTagsEditor(options = {}) {
         } : null,
 
         mode: config.allowModelSelect ? 'select' : 'display',
-        displayValue: config.currentModel
+        displayValue: config.displayValue
       });
 
       content.appendChild(modelSection);
@@ -468,6 +469,7 @@ function createTagsEditor(options = {}) {
           const tags = content.querySelector('[data-role="tags-textarea"]').value || '';
           let model = config.currentModel;
           let metadata = null;
+          let category = null;
 
           if (config.allowModelSelect) {
             const selector = content.querySelector('[data-role="model-selector"]');
@@ -479,18 +481,36 @@ function createTagsEditor(options = {}) {
             };
 
             const selectedOption = selector?.selectedOptions[0];
-            metadata = selectedOption?._modelMetadata || new ModelMetadata(model)
+
+            metadata = selectedOption?._modelMetadata;
+            category = selectedOption?._precomputedCategory;
+
+            if (!metadata) {
+              metadata = new ModelMetadata(model)
+            };
+
+            if (category && category !== "unknown") {
+              metadata._category = category
+            }
           } else {
             metadata = new ModelMetadata(config.currentModel);
             if (category) metadata._category = category
           };
 
+          const finalCategory = category || metadata.getCategory();
+
+          const storagePath = metadata.getStoragePath();
+
           const existing = db.findByModelName(model);
           let result;
 
           if (existing) {
-            result = db.update(existing.category, existing.id, model, tags)
+            result = db.update(existing.category, existing.id, storagePath, tags)
           } else {
+            if (finalCategory !== "unknown") {
+              metadata._category = finalCategory
+            };
+
             result = db.add(metadata, tags)
           };
 
@@ -502,7 +522,12 @@ function createTagsEditor(options = {}) {
           await saveConfig();
           showToast("Saved for " + metadata.getDisplayName(), "success");
 
-          if (onSave) onSave({ model, tags, category: metadata.getCategory() });
+          if (onSave) onSave({
+            model: storagePath,
+            tags,
+            category: finalCategory
+          });
+
           return true
         });
 
@@ -618,17 +643,27 @@ function createModelSection(options = {}) {
     selector.appendChild(defaultOption);
 
     // 添加模型列表
-    modelList.forEach((modelName) => {
+    modelList.forEach((item) => {
       const option = document.createElement("option");
-      option.value = typeof modelName === 'string' ? modelName : modelName.path;
-      option.textContent = typeof modelName === 'string' ? modelName : modelName.displayName;
-      option.style.background = theme.primary;
-      
-      // 保存metadata（如果有）
-      if (typeof modelName === 'object' && modelName.metadata) {
-        option._modelMetadata = modelName.metadata
+      if (typeof item === 'string') {
+        option.value = item;
+        const metadata = new ModelMetadata(item);
+        option.textContent = metadata.getRelativePath();
+      } else {
+        const rawPath = item.path || '';
+        option.value = rawPath;
+
+        if (item.metadata) {
+          option.textContent = item.metadata.getRelativePath();
+          option._modelMetadata = item.metadata;
+          option._precomputedCategory = item.group
+        } else {
+          const metadata = new ModelMetadata(rawPath);
+          option.textContent = metadata.getRelativePath();
+        }
       };
       
+      option.style.background = theme.primary;
       selector.appendChild(option)
     });
 
@@ -943,23 +978,27 @@ function createListItem(category, id, entry, theme, selectMode, selectedItems, l
   const content = document.createElement("div");
   content.style.cssText = "display: flex; align-items: center; justify-content: space-between; flex: 1; overflow: hidden;";
 
-  const getModelName = new ModelMetadata(entry.Model).getDisplayName();
+  const storagePath = entry.Model || "";
+  const fileName = storagePath?.split(/[\/\\]/).pop() || storagePath;
+  const displayName = fileName.replace(/\.(safetensors|sft|pt|pth|ckpt|bin|gguf|onnx|model)$/i, '');
+  
   const nameEl = document.createElement("span");
   nameEl.style.cssText = "font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;";
-  nameEl.textContent = getModelName || "Unnamed Model";
+  nameEl.textContent = displayName;
 
   const nameAdapter = new ComfyThemeAdapter();
   nameAdapter.bindElement(nameEl, { color: "text" });
 
+  const subFolder = storagePath.split(/[\/\\]/).slice(0, -1).join('/');
   const tagsPreview = document.createElement("span");
   tagsPreview.style.cssText = "font-size: 11px; opacity: 0.6; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 12px;";
   
-  const getTagsPreview = () => {
+  if (subFolder) {
+    tagsPreview.textContent = subFolder;
+  } else {
     const tags = entry.Tags || "";
-    return tags ? tags.substring(0, 25) + (tags.length > 25 ? "..." : "") : "No tags"
+    tagsPreview.textContent = tags ? tags.substring(0, 25) + (tags.length > 25 ? "..." : "") : "No tags"
   };
-  
-  tagsPreview.textContent = getTagsPreview();
 
   const previewAdapter = new ComfyThemeAdapter();
   previewAdapter.bindElement(tagsPreview, { color: "text" });
@@ -973,15 +1012,13 @@ function createListItem(category, id, entry, theme, selectMode, selectedItems, l
 
   wrapper.addEventListener("mouseenter", () => {
     if (!selectMode) {
-      wrapper.style.borderColor = theme.prompt;
-      showTooltip()
+      wrapper.style.borderColor = theme.prompt
     }
   });
 
   wrapper.addEventListener("mouseleave", () => {
     if (!selectMode) {
-      wrapper.style.borderColor = theme.border;
-      hideTooltip()
+      wrapper.style.borderColor = theme.border
     }
   });
 

@@ -4,7 +4,6 @@
  * 自动检测前端类型，支持手动覆盖为 Classic 模式
  */
 import { ComfyThemeAdapter } from "./adapter.js";
-import dialog from "./dialog.js";
 import {
   hexToRgba,
   getEffectiveFrontendType,
@@ -984,11 +983,63 @@ export function createDialogButton(label, theme, customStyle) {
 
   // 添加类型类名供 CSS 选择器使用
   if (customStyle && customStyle.type) {
-    el.classList.add(customStyle.type); // 例如 "primary", "danger" 等
-  }
+    el.classList.add(customStyle.type) // 例如 "primary", "danger" 等
+  };
   
-  return el;
-}
+  return el
+};
+
+export function createDashedButton(text, theme, customStyle = {}) {
+  const style = getUIStyle(theme);
+  const el = document.createElement("button");
+  el.className = "a1r-dashed-button" + (style.isClassic ? " classic" : " modern");
+
+  const baseStyle = {
+    width: "100%",
+    minHeight: style.isClassic ? "36px" : "44px",
+    padding: "10px 14px",
+    border: "1px dashed",
+    borderRadius: style.radius.md,
+    opacity: "0.6",
+    fontSize: style.isClassic ? "18px" : "20px",
+    cursor: "pointer",
+    transition: style.transition,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: theme.background,
+    color: theme.border,
+    borderColor: theme.border,
+    outline: "none",
+    marginTop: "8px"
+  };
+
+  Object.assign(el.style, baseStyle, customStyle);
+  el.textContent = text;
+
+  const adapter = new ComfyThemeAdapter();
+  adapter.bindElement(el, {
+    borderColor: "border",
+    background: "background",
+    color: "border"
+  });
+
+  el.addEventListener("mouseenter", () => {
+    el.style.borderColor = theme.text;
+    el.style.color = theme.text;
+    el.style.opacity = "1"
+  });
+
+  el.addEventListener("mouseleave", () => {
+    el.style.borderColor = theme.border;
+    el.style.color = theme.border;
+    el.style.opacity = "0.6"
+  });
+
+  el.addEventListener("remove", () => adapter.destroy());
+
+  return el
+};
 
 /**
  * 为按钮添加标准 hover 效果
@@ -1475,7 +1526,7 @@ export function createCoordTooltip(theme) {
     fontFamily: style.font.mono
   });
   
-  return el;
+  return el
 };
 
 // ========== 动态主题更新支持 ==========
@@ -1523,6 +1574,7 @@ export const custom = {
   // Buttons
   button: createButton,
   dialogButton: createDialogButton,
+  dashedButton: createDashedButton,
   buttonHover: addButtonHover,
   // Dialog / Overlay
   overlay: createOverlay,

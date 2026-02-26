@@ -23,7 +23,9 @@ export class ModelMetadata {
     this.displayName = this._extractNameWithoutExtension(path);
     this.sourceNode = sourceNode;
     this.widgetName = widgetName || (sourceNode ? this._extractWidgetName(sourceNode) : null);
-    this._category = null
+    this._category = null;
+    this._relativePath = null;
+    this._storagePath = null
   };
 
   _extractName(fullPath) {
@@ -36,6 +38,7 @@ export class ModelMetadata {
     const name = this._extractName(fullPath);
     const extensions = [
       '.safetensors',
+      '.sft',
       '.pt',
       '.pth',
       '.ckpt',
@@ -46,11 +49,20 @@ export class ModelMetadata {
       '.vae',
       '.clip',
       '.controlnet',
-      '.ipadapter'
+      '.ipadapter',
+      '.lora',
+      '.lycoris',
+      '.upscale',
+      '.upscaler',
+      '.unet',
+      '.diffusion',
+      '.inpaint'
     ];
 
     const lowerName = name.toLowerCase();
-    for (const ext of extensions) {
+    const sortedExts = extensions.sort((a, b) => b.length - a.length);
+
+    for (const ext of sortedExts) {
       if (lowerName.endsWith(ext)) {
         return name.slice(0, -ext.length)
       }
@@ -127,38 +139,242 @@ export class ModelMetadata {
     if (widgetName) {
       const wn = widgetName.toLowerCase();
       if (wn.includes("ckpt") || wn.includes("checkpoint")) return "checkpoints";
-      if (wn.includes("lora")) return "loras";
+      if (wn.includes("lora") || wn.includes("lycoris")) return "loras";
       if (wn.includes("unet")) return "unets";
       if (wn.includes("vae")) return "vaes";
       if (wn.includes("clip")) return "clips";
       if (wn.includes("controlnet")) return "controlnets";
       if (wn.includes("ipadapter")) return "ipadapters";
-      if (wn.includes("upscale")) return "upscalers";
-    }
+      if (wn.includes("upscale")) return "upscalers"
+    };
 
-    const parts = modelPath.split(/[\/\\]/);
-    const firstDir = parts[0]?.toLowerCase() || "unknown";
     const lower = modelPath.toLowerCase();
 
-    if (lower.includes("lora") || lower.includes("lycoris")) return "loras";
-    if (lower.includes("checkpoint") || lower.includes("checkpoints")) return "checkpoints";
-    if (lower.includes("unet")) return "unets";
-    if (lower.includes("vae")) return "vaes";
-    if (lower.includes("clip")) return "clips";
-    if (lower.includes("controlnet")) return "controlnets";
-    if (lower.includes("ipadapter")) return "ipadapters";
-    if (lower.includes("upscale")) return "upscalers";
+    if (/[\\\/]checkpoints?[\\\/]/i.test(modelPath)) return "checkpoints";
+    if (/[\\\/]loras?[\\\/]/i.test(modelPath)) return "loras";
+    if (/[\\\/]unets?[\\\/]/i.test(modelPath)) return "unets";
+    if (/[\\\/]vaes?[\\\/]/i.test(modelPath)) return "vaes";
+    if (/[\\\/]clips?[\\\/]/i.test(modelPath)) return "clips";
+    if (/[\\\/]controlnets?[\\\/]/i.test(modelPath)) return "controlnets";
+    if (/[\\\/]ipadapters?[\\\/]/i.test(modelPath)) return "ipadapters";
+    if (/[\\\/]upscalers?[\\\/]/i.test(modelPath)) return "upscalers";
 
-    if (firstDir.includes("lora") || firstDir.includes("lycoris")) return "loras";
-    if (firstDir.includes("checkpoint")) return "checkpoints";
-    if (firstDir.includes("unet")) return "unets";
-    if (firstDir.includes("vae")) return "vaes";
-    if (firstDir.includes("clip")) return "clips";
-    if (firstDir.includes("controlnet")) return "controlnets";
-    if (firstDir.includes("ipadapter")) return "ipadapters";
-    if (firstDir.includes("upscale")) return "upscalers";
+    const parts = modelPath.split(/[\/\\]/);
+
+    for (const part of parts) {
+      const dir = part.toLowerCase();
+      if (dir === "checkpoints" || dir === "checkpoint" || dir === "models") return "checkpoints";
+      if (dir === "loras" || dir === "lycoris" || dir === "lora") return "loras";
+      if (dir === "unet" || dir === "unets" || dir === "diffusion_models") return "unets";
+      if (dir === "vae" || dir === "vaes") return "vaes";
+      if (dir === "clip" || dir === "clips") return "clips";
+      if (dir === "controlnet" || dir === "controlnets") return "controlnets";
+      if (dir === "ipadapter" || dir === "ipadapters") return "ipadapters";
+      if (dir === "upscale" || dir === "upscalers" || dir === "upscale_models") return "upscalers";
+  }
+
+    const fileName = parts[parts.length - 1].toLowerCase();
+    if (fileName.includes("checkpoint") || fileName.includes("ckpt") || fileName.includes(".ckpt")) return "checkpoints";
+    if (fileName.includes("lora") || fileName.includes("lycoris")) return "loras";
+    if (fileName.includes("unet")) return "unets";
+    if (fileName.includes("vae")) return "vaes";
+    if (fileName.includes("clip")) return "clips";
+    if (fileName.includes("controlnet")) return "controlnets";
+    if (fileName.includes("ipadapter")) return "ipadapters";
+    if (fileName.includes("upscale")) return "upscalers";
 
     return "unknown"
+  };
+
+    /**
+   * 从路径中提取类别和相对路径
+   * 路径格式: .../models/checkpoints/SubFolder/File.safetensors
+   * 返回: { category: 'checkpoints', relativePath: 'SubFolder/File.safetensors' }
+   */
+  _parseModelPath(fullPath) {
+    if (!fullPath) return { category: 'unknown', relativePath: fullPath };
+
+    // 统一使用正斜杠处理
+    const normalizedPath = fullPath.replace(/\\/g, '/');
+    
+    // 匹配 models/类别/... 或 models\类别\... 格式
+    const modelsMatch = normalizedPath.match(/[\/\\]models[\/\\]([^\/\\]+)[\/\\](.+)$/i);
+    
+    if (modelsMatch) {
+      const category = modelsMatch[1].toLowerCase();
+      const relativePath = modelsMatch[2];  // SubFolder/File.safetensors
+      
+      // 标准化类别名（复数转单数或统一格式）
+      const normalizedCategory = this._normalizeCategoryName(category);
+      
+      return {
+        category: normalizedCategory,
+        relativePath: relativePath,
+        rawCategory: category
+      }
+    };
+
+    // 回退：尝试直接匹配已知类别文件夹
+    const categoryPatterns = [
+      { pattern: /[\/\\](checkpoints?)[\/\\]/i, category: 'checkpoints' },
+      { pattern: /[\/\\](loras?|lycoris)[\/\\]/i, category: 'loras' },
+      { pattern: /[\/\\](unets?)[\/\\]/i, category: 'unets' },
+      { pattern: /[\/\\](vaes?)[\/\\]/i, category: 'vaes' },
+      { pattern: /[\/\\](clips?)[\/\\]/i, category: 'clips' },
+      { pattern: /[\/\\](controlnets?)[\/\\]/i, category: 'controlnets' },
+      { pattern: /[\/\\](ipadapters?)[\/\\]/i, category: 'ipadapters' },
+      { pattern: /[\/\\](upscalers?|upscale_models)[\/\\]/i, category: 'upscalers' }
+    ];
+
+    for (const { pattern, category } of categoryPatterns) {
+      const match = normalizedPath.match(pattern);
+      if (match) {
+        // 提取类别后的路径
+        const afterCategory = normalizedPath.split(match[0])[1];
+        return {
+          category: category,
+          relativePath: afterCategory || this._extractName(fullPath),
+          rawCategory: match[1]
+        }
+      }
+    };
+
+    // 最终回退
+    return {
+      category: 'unknown',
+      relativePath: this._extractName(fullPath),
+      rawCategory: 'unknown'
+    }
+  };
+
+  /**
+   * 标准化类别名称
+   */
+  _normalizeCategoryName(rawName) {
+    const name = rawName.toLowerCase();
+    
+    // 复数转单数标准化
+    const mappings = {
+      'checkpoints': 'checkpoints',
+      'checkpoint': 'checkpoints',
+      'loras': 'loras',
+      'lora': 'loras',
+      'lycoris': 'loras',
+      'unets': 'unets',
+      'unet': 'unets',
+      'vaes': 'vaes',
+      'vae': 'vaes',
+      'clips': 'clips',
+      'clip': 'clips',
+      'controlnets': 'controlnets',
+      'controlnet': 'controlnets',
+      'ipadapters': 'ipadapters',
+      'ipadapter': 'ipadapters',
+      'upscalers': 'upscalers',
+      'upscale': 'upscalers',
+      'upscale_models': 'upscalers'
+    };
+    
+    return mappings[name] || name
+  };
+
+  /**
+   * 获取类别（优先使用缓存）
+   */
+  getCategory() {
+    if (this._category) return this._category;
+    
+    // 优先使用 widgetName 推断
+    if (this.widgetName) {
+      const cat = this._getCategoryFromWidgetName(this.widgetName);
+      if (cat) {
+        this._category = cat;
+        return cat
+      }
+    };
+
+    // 使用路径解析
+    const parsed = this._parseModelPath(this.path);
+    this._category = parsed.category;
+    this._relativePath = parsed.relativePath;
+    
+    return this._category
+  };
+
+  /**
+   * 获取相对路径（含子文件夹）
+   * 例如: "MLiang/MLiang 国游_MLiang 国游 V1.safetensors"
+   */
+  getRelativePath() {
+    if (this._relativePath) return this._relativePath;
+    
+    const parsed = this._parseModelPath(this.path);
+    this._relativePath = parsed.relativePath;
+    this._category = parsed.category; // 顺便缓存类别
+    
+    return this._relativePath
+  };
+
+  /**
+   * 获取存储路径（用于保存到数据库）
+   * 格式: "子文件夹\\文件名.safetensors"（使用双反斜杠便于Windows路径兼容）
+   */
+  getStoragePath() {
+    if (this._storagePath) return this._storagePath;
+    
+    const relativePath = this.getRelativePath();
+    // 统一使用双反斜杠作为存储格式，兼容Windows
+    this._storagePath = relativePath.replace(/\//g, '\\');
+    
+    return this._storagePath
+  };
+
+  /**
+   * 获取用于显示的完整路径（Editor下拉框使用）
+   * 包含子文件夹，但去掉 models/类别 前缀
+   */
+  getDisplayPath() {
+    return this.getRelativePath()
+  };
+
+  /**
+   * 获取用于Manager列表显示的短名称（无后缀）
+   */
+  getManagerDisplayName() {
+    // 只返回文件名，不含路径和后缀
+    const relativePath = this.getRelativePath();
+    const fileName = relativePath.split(/[\/\\]/).pop();
+    
+    // 去掉扩展名
+    const extensions = [
+      '.safetensors', '.sft', '.pt', '.pth', '.ckpt', 
+      '.bin', '.gguf', '.onnx', '.model'
+    ];
+    
+    const lowerName = fileName.toLowerCase();
+    for (const ext of extensions.sort((a, b) => b.length - a.length)) {
+      if (lowerName.endsWith(ext)) {
+        return fileName.slice(0, -ext.length)
+      }
+    };
+    
+    return fileName
+  };
+
+  _getCategoryFromWidgetName(widgetName) {
+    if (!widgetName) return null;
+    const wn = widgetName.toLowerCase();
+    
+    if (wn.includes("ckpt") || wn.includes("checkpoint")) return "checkpoints";
+    if (wn.includes("lora") || wn.includes("lycoris")) return "loras";
+    if (wn.includes("unet")) return "unets";
+    if (wn.includes("vae")) return "vaes";
+    if (wn.includes("clip")) return "clips";
+    if (wn.includes("controlnet")) return "controlnets";
+    if (wn.includes("ipadapter")) return "ipadapters";
+    if (wn.includes("upscale")) return "upscalers";
+    
+    return null
   };
 
   getDisplayName() {
@@ -224,38 +440,35 @@ export class TagsDatabase {
   // ========== CRUD 操作 ==========
 
   add(categoryOrMetadata, modelNameOrTags, tagsText) {
-    let category, modelName, tags;
+    let category, modelPath, tags;
 
     if (categoryOrMetadata instanceof ModelMetadata) {
       const metadata = categoryOrMetadata;
       category = metadata.getCategory();
-      modelName = metadata.path;
-      tags = modelNameOrTags || "";
+      modelPath = metadata.getStoragePath();
+      tags = modelNameOrTags || ""
     } else {
       category = categoryOrMetadata;
-      modelName = modelNameOrTags;
-      tags = tagsText || "";
-    }
+      modelPath = modelNameOrTags;
+      tags = tagsText || ""
+    };
 
     if (!category) category = "unknown";
     if (!this._data[category]) {
       this._data[category] = {};
-      this._nextIds[category] = 1;
-    }
-
-    const baseName = this._extractModelName(modelName);
-    if (!baseName) return null;
+      this._nextIds[category] = 1
+    };
 
     // 检查是否已存在
-    const existing = this.findByModelName(modelName);
+    const existing = this.findByModelName(modelPath);
     if (existing) {
       // 更新现有条目
-      return this.update(existing.category, existing.id, modelName, tags);
+      return this.update(existing.category, existing.id, modelPath, tags);
     }
 
     const id = String(this._nextIds[category]++);
     this._data[category][id] = {
-      Model: modelName,
+      Model: modelPath,
       Tags: tags.trim()
     };
 
@@ -265,8 +478,63 @@ export class TagsDatabase {
       id,
       category,
       entry: this._data[category][id]
+    }
+  };
+
+  findByModelName(modelName) {
+    const searchName = this._normalizeModelName(modelName);
+    const tempMeta = new ModelMetadata(modelName);
+    const inferredCategory = tempMeta.getCategory();
+
+    if (inferredCategory !== "unknown" && this._data[inferredCategory]) {
+      for (const [id, entry] of Object.entries(this._data[inferredCategory])) {
+        if (this._matchModelName(entry.Model, searchName)) {
+          return { id, category: inferredCategory, entry }
+        }
+      }
     };
-  }
+
+    for (const [category, entries] of Object.entries(this._data)) {
+      for (const [id, entry] of Object.entries(entries)) {
+        if (this._matchModelName(entry.Model, searchName)) {
+          return { id, category, entry }
+        }
+      }
+    };
+
+    return null
+  };
+
+  _normalizeModelName(modelPath) {
+    if (!modelPath) return "";
+
+    const normalized = modelPath.replace(/\\/g, '/');
+
+    const parts = normalized.split('/');
+    if (parts.length > 1 && normalized.includes('/')) {
+      return parts.slice(-2).join('/')
+    };
+
+    return parts.pop() || modelPath
+  };
+
+  _matchModelName(storedPath, searchPath) {
+    if (!storedPath || !searchPath) return false;
+    if (storedPath === searchPath) return true;
+
+    const stored = storedPath.replace(/\\/g, '/').toLowerCase();
+    const search = searchPath.replace(/\\/g, '/').toLowerCase();
+    
+    if (stored === search) return true;
+    if (stored.endsWith('/' + search)) return true;
+    if (search.endsWith('/' + stored)) return true;
+
+    const storedFile = stored.split('/').pop();
+    const searchFile = search.split('/').pop();
+    if (storedFile === searchFile) return true;
+
+    return false
+  };
 
   update(category, id, modelName, tags) {
     if (!this._data[category]?.[id]) return false;
@@ -302,30 +570,6 @@ export class TagsDatabase {
       results.push(this.delete(category, id));
     });
     return results.every(r => r);
-  }
-
-  findByModelName(modelName) {
-    const baseName = this._extractModelName(modelName);
-
-    // 先尝试快速路径：从路径推断类别
-    const inferredCategory = new ModelMetadata(modelName).getCategory();
-    if (this._data[inferredCategory]) {
-      for (const [id, entry] of Object.entries(this._data[inferredCategory])) {
-        if (this._extractModelName(entry.Model) === baseName) {
-          return { id, category: inferredCategory, entry };
-        }
-      }
-    }
-
-    // 全局搜索
-    for (const [category, entries] of Object.entries(this._data)) {
-      for (const [id, entry] of Object.entries(entries)) {
-        if (this._extractModelName(entry.Model) === baseName) {
-          return { id, category, entry };
-        }
-      }
-    }
-    return null;
   }
 
   getOrCreate(modelName, widgetName = null, sourceNode = null) {
