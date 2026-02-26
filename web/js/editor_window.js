@@ -294,7 +294,6 @@ function createModelSection(options = {}) {
   const label = custom.sectionLabel("model", theme);
   label.style.width      = isClassic ? "70px" : "80px";
   label.style.flexShrink = "0";
-  label.style.userSelect = "none";
   label.style.cursor     = "default";
   if (isClassic) {
     label.style.textTransform = "uppercase";
@@ -424,7 +423,6 @@ function createTagSection(options = {}) {
   label.style.width       = isClassic ? "70px" : "80px";
   label.style.flexShrink  = "0";
   label.style.marginTop   = isClassic ? "6px" : "8px";
-  label.style.userSelect  = "none";
   label.style.cursor      = "default";
   if (isClassic) {
     label.style.textTransform = "uppercase";

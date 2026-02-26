@@ -1079,7 +1079,8 @@ export function createSectionLabel(text, theme) {
   
   Object.assign(el.style, baseStyle, {
     color: theme.text,
-    fontFamily: style.font.ui
+    fontFamily: style.font.ui,
+    userSelect: "none"
   });
   
   el.textContent = text;

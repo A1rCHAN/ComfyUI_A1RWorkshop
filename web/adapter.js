@@ -60,6 +60,22 @@ class ComfyThemeAdapter {
         instance._theme = newTheme;
         instance._frontendType = frontendType;
         instance._isClassic = newTheme._isClassic;
+
+        // 清理已移除DOM的绑定
+        instance._bindings = instance._bindings.filter(b => {
+          if (!b.el) return false;
+          try { return document.body.contains(b.el); } catch (e) { return false; }
+        });
+
+        // 前端类型变化时需要重新标准化样式映射（处理前端特定值）
+        if (frontendChanged) {
+          instance._bindings.forEach(binding => {
+            binding.styleMap = instance._normalizeStyleMap(binding.originalMap);
+          });
+        }
+
+        // 重新应用所有绑定元素的样式
+        instance._bindings.forEach(binding => instance._applyBinding(binding));
         
         // 触发主题变化回调
         instance._callbacks.forEach(fn => {

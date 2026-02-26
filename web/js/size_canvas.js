@@ -1,5 +1,5 @@
 import { ComfyThemeAdapter } from "../adapter.js";
-import { custom } from "../style.js";
+import { custom, showToast } from "../style.js";
 import { hexToRgba } from "../theme.js";
 import { DialogBuilder, DIALOG_TYPE } from "../dialog.js";
 import { app } from "/scripts/app.js";
@@ -100,13 +100,14 @@ function showCanvasSettingDialog({ currentMin, currentMax, currentStep }) {
         cleanupFns.forEach(fn => fn());
         return null;
       })
-      .addButton("Apply", "secondary", () => {
+      .addButton("Save", "secondary", () => {
         cleanupFns.forEach(fn => fn());
+        showToast("Success to save canvas settings", "info");
         return { 
           min: state.rangeMinVal, 
           max: state.rangeMaxVal, 
           step: state.stepCurrentVal 
-        };
+        }
       }, { autoFocus: true });
     
     builder.open().then(resolve);
@@ -128,6 +129,7 @@ function createRangeSection(theme, state, adapter, cleanupFns, updaters) {
 
   const minDisplay = custom.valueDisplay(state.rangeMinVal, theme, "left");
   minDisplay.style.paddingLeft = "6px";
+  minDisplay.style.userSelect = "none";
   controlWrapper.appendChild(minDisplay);
 
   const sliderContainer = custom.sliderContainer();
@@ -163,6 +165,7 @@ function createRangeSection(theme, state, adapter, cleanupFns, updaters) {
 
   const maxDisplay = custom.valueDisplay(state.rangeMaxVal, theme, "right");
   maxDisplay.style.paddingRight = "6px";
+  maxDisplay.style.userSelect = "none";
   controlWrapper.appendChild(maxDisplay);
 
   // 工具函数
@@ -394,6 +397,7 @@ function createStepSection(theme, state, adapter, cleanupFns, updaters) {
 
   const minDisplay = custom.valueDisplay("128", theme, "left");
   minDisplay.style.paddingLeft = "6px";
+  minDisplay.style.userSelect = "none";
   controlWrapper.appendChild(minDisplay);
 
   const sliderContainer = custom.sliderContainer();
@@ -419,6 +423,7 @@ function createStepSection(theme, state, adapter, cleanupFns, updaters) {
 
   const valueDisplay = custom.valueDisplay(state.stepCurrentVal, theme, "right");
   valueDisplay.style.paddingRight = "6px";
+  valueDisplay.style.userSelect = "none";
   controlWrapper.appendChild(valueDisplay);
 
   // 视觉更新函数 - 注册到 updaters
