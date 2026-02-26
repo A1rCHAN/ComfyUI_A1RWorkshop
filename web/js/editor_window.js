@@ -64,7 +64,7 @@ export function createTagsEditor(options = {}) {
           : null;
 
         config = {
-          title:             "Embedding Tags Editor",
+          title:             "Embedding Tag Editor",
           showManagerButton: true,
           allowModelSelect:  true,
           currentModel:      currentModelPath,
@@ -92,7 +92,7 @@ export function createTagsEditor(options = {}) {
       case EDITOR_MODE.MANAGER_EDIT: {
         const editMetadata = entry?.Model ? new ModelMetadata(entry.Model) : null;
         config = {
-          title:             "Edit Tags",
+          title:             "Edit Model Tag",
           showManagerButton: false,
           allowModelSelect:  false,
           currentModel:      entry?.Model || "",
@@ -107,7 +107,7 @@ export function createTagsEditor(options = {}) {
 
       case EDITOR_MODE.MANAGER_ADD: {
         config = {
-          title:             "Add New Model",
+          title:             "Add Model Tag",
           showManagerButton: false,
           allowModelSelect:  true,
           currentModel:      "",

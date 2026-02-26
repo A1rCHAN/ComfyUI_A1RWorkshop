@@ -24,7 +24,7 @@ app.registerExtension({
   getNodeMenuItems(node) {
     if (!isModelLoaderNode(node)) return [];
     return [{
-      content: "Open Embedding Editor",
+      content: "Open Tag Editor",
       callback: () => { ensureInit().then(() => showEditor(node)) }
     }]
   },
@@ -33,7 +33,7 @@ app.registerExtension({
     return [
       null,
       {
-        content: "Open Embedding Manager",
+        content: "Open Tags Manager",
         callback: () => { ensureInit().then(() => showManager()) }
       }
     ]
