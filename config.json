@@ -1,11 +1,3 @@
 {
-  "EmbeddingTags": {
-    "loras": {},
-    "checkpoints": {
-      "1": {
-        "Model": "三国杀.safetensors",
-        "Tags": "mliang sanguo"
-      }
-    }
-  }
+  "EmbeddingTags": {}
 }

@@ -13,6 +13,7 @@ let _configCache = null;
 let _isLoading = false;
 let _loadPromise = null;
 let _changeListeners = new Set();
+let _lastSavedJSON = null; // 上一次成功写入磁盘的 filteredData 快照（JSON 字符串）
 
 // ========== ModelMetadata 类 ==========
 
@@ -239,10 +240,11 @@ export class ModelMetadata {
       }
     };
 
-    // 最终回退
+    // 最终回退：路径本身已是相对路径，原样保留（含子文件夹），避免丢失路径信息
+    const normalizedFull = fullPath.replace(/\\/g, '/');
     return {
       category: 'unknown',
-      relativePath: this._extractName(fullPath),
+      relativePath: normalizedFull,
       rawCategory: 'unknown'
     }
   };
@@ -310,7 +312,8 @@ export class ModelMetadata {
     
     const parsed = this._parseModelPath(this.path);
     this._relativePath = parsed.relativePath;
-    this._category = parsed.category; // 顺便缓存类别
+    // 注意：不在此处缓存 _category，避免覆盖 getCategory() 通过 widgetName 推断的结果
+    // _category 的唯一赋值入口是 getCategory()
     
     return this._relativePath
   };
@@ -539,9 +542,16 @@ export class TagsDatabase {
   update(category, id, modelName, tags) {
     if (!this._data[category]?.[id]) return false;
 
+    const trimmedTags = (tags || "").trim();
+
+    // tags 为空则删除该条目，避免空条目积压导致 ID 计数器不重置
+    if (!trimmedTags) {
+      return this.delete(category, id);
+    }
+
     this._data[category][id] = {
       Model: modelName,
-      Tags: (tags || "").trim()
+      Tags: trimmedTags
     };
 
     this._notifyChange("update", { category, id, entry: this._data[category][id] });
@@ -585,7 +595,7 @@ export class TagsDatabase {
   }
 
   getCategories() {
-    return Object.keys(this._data);
+    return Object.keys(this._data).sort(_sortCategories);
   }
 
   toJSON() {
@@ -642,6 +652,8 @@ class ConfigManager {
       this._db = new TagsDatabase(data);
       this._isInitialized = true;
       _configCache = this._db;
+      // 以磁盘上已有的过滤数据作为初始快照
+      _lastSavedJSON = _buildFilteredJSON(this._db);
       return this._db;
     } finally {
       _isLoading = false;
@@ -666,9 +678,8 @@ class ConfigManager {
   async save() {
     if (!this._db) throw new Error("Config not initialized");
 
-    const config = {
-      [CONFIG_KEYS.EMBEDDING_TAGS]: this._db.toJSON()
-    };
+    const filteredData = _buildFilteredData(this._db);
+    const config = { [CONFIG_KEYS.EMBEDDING_TAGS]: filteredData };
 
     try {
       const response = await fetch(API_ENDPOINT, {
@@ -681,6 +692,8 @@ class ConfigManager {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
+      // 更新快照，使 saveFilteredConfig 后续能感知变化
+      _lastSavedJSON = JSON.stringify(filteredData);
       showToast("Configuration saved", "success");
       return true;
     } catch (err) {
@@ -869,27 +882,34 @@ export function getModelFromNode(node) {
 }
 
 /**
- * 保存配置，但过滤掉空tags的条目
- * 如果没有有效数据，则不写入文件
- * @returns {Promise<boolean>} 是否有实际数据被保存
+ * 类别排序：checkpoints > loras > 其他按字母顺序
  */
-export async function saveFilteredConfig(db) {
-  if (!db) {
-    db = configManager.db;
-  }
+function _sortCategories(a, b) {
+  const rank = (c) => {
+    if (c === "checkpoints") return 0;
+    if (c === "loras")       return 1;
+    return 2;
+  };
+  const ra = rank(a), rb = rank(b);
+  if (ra !== rb) return ra - rb;
+  return a.localeCompare(b);
+}
 
-  // 创建过滤后的数据副本
+/**
+ * 从 db 构建过滤后的 filteredData 对象（过滤空 tags，按类别排序）
+ * 供 saveConfig 和 saveFilteredConfig 共用
+ */
+function _buildFilteredData(db) {
   const filteredData = {};
-  let hasValidData = false;
+  const sortedCategories = Object.keys(db.toJSON()).sort(_sortCategories);
 
-  Object.entries(db.toJSON()).forEach(([category, entries]) => {
+  sortedCategories.forEach(category => {
+    const entries = db.toJSON()[category] || {};
     const filteredEntries = {};
-    
+
     Object.entries(entries).forEach(([id, entry]) => {
-      // 只保留有非空tags的条目
       if (entry.Tags && entry.Tags.trim().length > 0) {
         filteredEntries[id] = entry;
-        hasValidData = true;
       }
     });
 
@@ -898,16 +918,35 @@ export async function saveFilteredConfig(db) {
     }
   });
 
-  // 如果没有有效数据，直接返回false，不调用API
-  if (!hasValidData) {
-    console.log("[ConfigManager] No valid data to save, skipping API call");
-    return false;
+  return filteredData;
+}
+
+/**
+ * 序列化当前 db 的过滤快照，用于与 _lastSavedJSON 比较
+ */
+function _buildFilteredJSON(db) {
+  return JSON.stringify(_buildFilteredData(db));
+}
+
+/**
+ * 保存配置，过滤空 tags 后写入 JSON。
+ * 返回值：
+ *   "unchanged" — 数据与上次保存完全一致，未写入
+ *   true        — 成功写入
+ *   false       — 写入失败（网络/服务器错误）
+ */
+export async function saveFilteredConfig(db) {
+  if (!db) db = configManager.db;
+
+  const filteredData  = _buildFilteredData(db);
+  const currentJSON   = JSON.stringify(filteredData);
+
+  // 与上次保存快照比较：完全一致则跳过写入
+  if (_lastSavedJSON !== null && currentJSON === _lastSavedJSON) {
+    return "unchanged";
   }
 
-  // 构建配置对象
-  const config = {
-    [CONFIG_KEYS.EMBEDDING_TAGS]: filteredData
-  };
+  const config = { [CONFIG_KEYS.EMBEDDING_TAGS]: filteredData };
 
   try {
     const response = await fetch(API_ENDPOINT, {
@@ -920,6 +959,7 @@ export async function saveFilteredConfig(db) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
+    _lastSavedJSON = currentJSON; // 更新快照
     showToast("Configuration saved", "success");
     return true;
   } catch (err) {
