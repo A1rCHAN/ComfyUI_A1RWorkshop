@@ -9,7 +9,7 @@ import {
   getEffectiveFrontendType,
   FRONTEND_TYPE,
   getCSSVar
-} from "./theme.js";
+} from "./dist/theme/theme.js";
 
 // ========== 前端类型检测与风格配置 ==========
 

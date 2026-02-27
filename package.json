@@ -1,0 +1,25 @@
+{
+  "name": "comfyui_a1rworkshop",
+  "version": "1.0.0",
+  "description": "Re-build version of my custom node: [A1rSpace](https://registry.comfy.org/nodes/comfyui_a1rspace)   Will be public to ComfyUI Registry when it done.   However, you could downlaod this repo to use it for now, just needs to pay attention to the update.",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/A1rCHAN/ComfyUI_A1RWorkshop.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/A1rCHAN/ComfyUI_A1RWorkshop/issues"
+  },
+  "homepage": "https://github.com/A1rCHAN/ComfyUI_A1RWorkshop#readme",
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

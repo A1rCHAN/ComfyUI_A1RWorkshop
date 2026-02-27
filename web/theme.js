@@ -188,33 +188,46 @@ const STORAGE_KEY_THEME = 'a1rworkshop.themeOverride';
  * @returns {string} 'vue' | 'litegraph'
  */
 export function detectFrontendType() {
-  // 方法1: 检测Vue应用实例 (Nodes 2.0标志)
-  if (window.comfyAPI?.app?.vueApp || document.querySelector('#vue-app')) {
+  console.log('[Theme] detectFrontendType start');
+  try {
+    // check explicit VueNodes setting first - this is the toggle shown in main menu
+    const vueNodes = window.app?.ui?.settings?.getSettingValue?.("Comfy.VueNodes.Enabled");
+    console.log('[Theme] detectFrontendType vueNodesEnabled', vueNodes);
+    if (vueNodes === true) {
+      console.log('[Theme] detectFrontendType -> VUE via VueNodes.Enabled');
+      return FRONTEND_TYPE.VUE;
+    }
+    if (vueNodes === false) {
+      console.log('[Theme] detectFrontendType -> LITEGRAPH via VueNodes.Enabled');
+      return FRONTEND_TYPE.LITEGRAPH;
+    }
+
+    const useNewMenu = window.app?.ui?.settings?.getSettingValue?.("Comfy.UseNewMenu");
+    console.log('[Theme] detectFrontendType useNewMenu', useNewMenu);
+    if (useNewMenu === true) {
+      console.log('[Theme] detectFrontendType -> VUE via useNewMenu');
+      return FRONTEND_TYPE.VUE;
+    }
+    if (useNewMenu === false) {
+      console.log('[Theme] detectFrontendType -> LITEGRAPH via useNewMenu');
+      return FRONTEND_TYPE.LITEGRAPH;
+    }
+  } catch (e) {
+    console.warn("[Theme] detectFrontendType error:", e)
+  };
+
+  // DOM inspection fallback for dynamic switching
+  if (window.comfyAPI?.app?.vueApp || document.querySelector('#vue-app') || document.querySelector('.comfy-vue-node')) {
+    console.log('[Theme] detectFrontendType -> VUE via DOM');
     return FRONTEND_TYPE.VUE;
   }
-  
-  // 方法2: 检测LiteGraph Canvas元素
   if (window.LiteGraph && document.querySelector('canvas.lgraphcanvas')) {
+    console.log('[Theme] detectFrontendType -> LITEGRAPH via DOM');
     return FRONTEND_TYPE.LITEGRAPH;
   }
-  
-  // 方法3: 检测ComfyUI设置中的Nodes 2.0开关
-  try {
-    const useNewMenu = window.app?.ui?.settings?.getSettingValue?.('Comfy.UseNewMenu');
-    if (useNewMenu === true) return FRONTEND_TYPE.VUE;
-  } catch (e) {
-    console.warn('[Theme] Error detecting frontend type from settings:', e);
-  }
-  
-  // 方法4: 检测DOM结构特征 (Nodes 2.0使用Vue组件，旧版使用Canvas)
-  const hasVueComponents = !!document.querySelector('.comfy-vue-node') || 
-    !!document.querySelector('[class*="comfyui-"]');
-  const hasLiteGraph = !!window.LGraphCanvas;
-  
-  if (hasVueComponents && !hasLiteGraph) return FRONTEND_TYPE.VUE;
-  if (hasLiteGraph && !hasVueComponents) return FRONTEND_TYPE.LITEGRAPH;
-  
-  // 默认假设为新版 (未来趋势)
+
+  // default assumption
+  console.log('[Theme] detectFrontendType -> default VUE');
   return FRONTEND_TYPE.VUE;
 };
 
@@ -239,6 +252,7 @@ export function getFrontendPreference() {
  * @param {string} type - 'vue' | 'litegraph' | 'auto'
  */
 export function setFrontendPreference(type) {
+  console.log('[Theme] setFrontendPreference', type);
   try {
     localStorage.setItem(STORAGE_KEY, type);
     // 触发主题重新计算
@@ -288,6 +302,7 @@ const CSS_VAR_MAP = {
  * 注入CSS变量
  */
 export function injectThemeCSS(theme) {
+  console.log('[Theme] injectThemeCSS', theme._themeName, 'classic?', theme._isClassic, 'frontend', theme._frontendType);
   const root = document.documentElement;
   const isClassic = theme._isClassic;
   const frontend = theme._frontendType;
@@ -302,6 +317,9 @@ export function injectThemeCSS(theme) {
   root.style.setProperty(CSS_VAR_MAP.shadowSm, hexToRgba(shadowBase, isClassic ? 0.3 : 0.1));
   root.style.setProperty(CSS_VAR_MAP.shadowMd, hexToRgba(shadowBase, isClassic ? 0.5 : 0.3));
   root.style.setProperty(CSS_VAR_MAP.shadowLg, hexToRgba(shadowBase, isClassic ? 0.6 : 0.4));
+
+  // accent 颜色（使用 prompt 字段作为强调色，所有内置主题均以 prompt 承担 accent 角色）
+  root.style.setProperty('--a1r-accent', theme.prompt || theme.accent || '#5fa5fa');
 
   root.style.setProperty(CSS_VAR_MAP.isClassic, isClassic ? '1' : '0');
 
@@ -339,22 +357,41 @@ export function getCSSVar(name, fallback = '') {
  * 检测当前ComfyUI主题设置
  */
 export function detectCurrentTheme() {
+  console.log('[Theme] detectCurrentTheme start');
   // 检查是否有主题覆盖设置
   try {
     const themeOverride = localStorage.getItem(STORAGE_KEY_THEME);
     if (themeOverride && THEME_COLORS[themeOverride]) {
+      console.log('[Theme] override found', themeOverride);
       return themeOverride;
     }
   } catch (e) {
     console.warn('[Theme] Error reading theme override:', e);
   }
-  
+
+  const frontendType = getEffectiveFrontendType();
+  console.log('[Theme] effective frontendType', frontendType);
+  if (frontendType === FRONTEND_TYPE.LITEGRAPH) {
+    console.log('[Theme] forcing classic due to frontendType');
+    try {
+      if (window.app?.ui?.settings) {
+        const variant = window.app.ui.settings.getSettingValue('A1RWorkshop.ClassicThemeVariant');
+        if (variant && THEME_COLORS[variant]) {
+          console.log('[Theme] classic variant', variant);
+          return variant;
+        }
+      }
+    } catch (e) {}
+    return 'classic';
+  }
+
   // 从ComfyUI设置API获取
   try {
     if (window.app?.ui?.settings) {
       const colorPalette = window.app.ui.settings.getSettingValue('Comfy.ColorPalette');
       if (colorPalette) {
         const themeName = colorPalette.toLowerCase().trim();
+        console.log('[Theme] Comfy.ColorPalette value', themeName);
         // 如果用户选择了classic主题，直接返回
         if (THEME_COLORS[themeName]) return themeName;
       }
@@ -450,59 +487,100 @@ export function hexToRgba(hex, alpha = 1) {
 
 /**
  * 监听主题和前端类型变化
- * @param {Function} callback - 主题变化时的回调函数，接收新主题对象作为参数
- * @returns {Object} 包含清理函数的对象 { cleanup: Function }
  */
 export function watchTheme(callback) {
   let currentTheme = detectCurrentTheme();
   let currentFrontend = getEffectiveFrontendType();
 
+  // setup theme initially
   injectThemeCSS(getTheme());
   
   const checkChange = () => {
     const newTheme = detectCurrentTheme();
     const newFrontend = getEffectiveFrontendType();
-    
+
     if (newTheme !== currentTheme || newFrontend !== currentFrontend) {
+      console.log('[Theme] watchTheme detected change', { newTheme, newFrontend, oldTheme: currentTheme, oldFrontend: currentFrontend });
       currentTheme = newTheme;
       currentFrontend = newFrontend;
 
       const themeObject = getTheme();
-
       injectThemeCSS(themeObject);
 
       callback(themeObject, currentTheme, currentFrontend);
     }
   };
-  
-  // 轮询检测（轻量级，只比较字符串）
-  const interval = setInterval(checkChange, 500);
-  
-  // DOM观察
-  const observer = new MutationObserver(() => { checkChange() });
-  
-  observer.observe(document.body, {
-    attributes: true,
-    attributeFilter: ['data-theme', 'class']
-  });
-  
-  // 监听自定义前端切换事件
-  const handleFrontendChange = (e) => { checkChange() };
-  window.addEventListener('a1rworkshop:frontendChanged', handleFrontendChange);
-  
-  // 监听自定义主题切换事件
-  const handleThemeChange = () => { checkChange() };
-  window.addEventListener('a1rworkshop:themeChanged', handleThemeChange);
-  
-  return {
-    cleanup: () => {
-      clearInterval(interval);
-      observer.disconnect();
-      window.removeEventListener('a1rworkshop:frontendChanged', handleFrontendChange);
-      window.removeEventListener('a1rworkshop:themeChanged', handleThemeChange);
+
+  // 监听 ComfyUI setting 变化
+  // Because `dispatchChange` events are fired on the settings dialog element (not window),
+  // we patch the method to also emit a duplicate event on window. That way we never miss a
+  // change regardless of when `watchTheme` runs.
+
+  function patchSettings() {
+    const s = window.app?.ui?.settings;
+    if (s && !s.__a1r_patched) {
+      const orig = s.dispatchChange.bind(s);
+      s.dispatchChange = (id, value, oldValue) => {
+        orig(id, value, oldValue);
+        window.dispatchEvent(new CustomEvent(id + '.change', {
+          detail: { value, oldValue }
+        }));
+      };
+      s.__a1r_patched = true;
+    }
+  }
+
+  patchSettings();
+  const settingsInterval = setInterval(() => {
+    if (window.app?.ui?.settings) {
+      patchSettings();
+      clearInterval(settingsInterval);
+    }
+  }, 500);
+
+  const handleGenericChange = (e) => {
+    const id = e.type.replace(/\.change$/, '');
+    console.log('[Theme] generic setting event', id);
+    if (id === 'Comfy.VueNodes.Enabled') {
+      console.log('[Theme] vue toggle event received, switching frontend');
+      checkChange();
+    } else if (id === 'Comfy.ColorPalette' || id === 'Comfy.UseNewMenu') {
+      checkChange();
     }
   };
-}
+
+  window.addEventListener('Comfy.VueNodes.Enabled.change', handleGenericChange);
+  window.addEventListener('Comfy.ColorPalette.change', handleGenericChange);
+  window.addEventListener('Comfy.UseNewMenu.change', handleGenericChange);
+
+  // 监听 body 主题变化
+  const observer = new MutationObserver(() => checkChange());
+
+  observer.observe(document.body, {
+    attributes: true,
+    attributeFilter: ["data-theme", "class"]
+  });
+
+  // 监听你自己的事件
+  window.addEventListener("a1rworkshop:frontendChanged", checkChange);
+  window.addEventListener("a1rworkshop:themeChanged", checkChange);
+
+  return {
+    cleanup: () => {
+      observer.disconnect();
+      settings?.removeEventListener?.("change", handleSettingChange);
+      settings?.removeEventListener?.('Comfy.VueNodes.Enabled.change', handleGenericChange);
+      settings?.removeEventListener?.('Comfy.ColorPalette.change', handleGenericChange);
+      settings?.removeEventListener?.('Comfy.UseNewMenu.change', handleGenericChange);
+      window.removeEventListener('Comfy.VueNodes.Enabled.change', handleGenericChange);
+      window.removeEventListener('Comfy.ColorPalette.change', handleGenericChange);
+      window.removeEventListener('Comfy.UseNewMenu.change', handleGenericChange);
+      clearInterval(settingsInterval);
+      window.removeEventListener("a1rworkshop:frontendChanged", checkChange);
+      window.removeEventListener("a1rworkshop:themeChanged", checkChange)
+    }
+  }
+};
 
 /**
  * 初始化设置面板
@@ -527,6 +605,11 @@ export function initSettings(app) {
     ],
     tooltip: "Force a specific UI style or let it auto-detect based on your ComfyUI frontend version. Classic mode uses直角边框/等宽字体/硬阴影风格。",
     onChange: (value) => {
+      // 切换回 Vue/Auto 时，清除残留的 Classic 主题覆盖
+      // 否则 detectCurrentTheme 会因 STORAGE_KEY_THEME 中残留的 "classic" 而锁死颜色
+      if (value !== FRONTEND_TYPE.LITEGRAPH) {
+        try { localStorage.removeItem(STORAGE_KEY_THEME); } catch (e) {}
+      }
       setFrontendPreference(value);
       // 提示用户刷新
       if (app.extensionManager?.dialog) {
