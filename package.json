@@ -4,7 +4,7 @@
   "description": "Re-build version of my custom node: [A1rSpace](https://registry.comfy.org/nodes/comfyui_a1rspace)   Will be public to ComfyUI Registry when it done.   However, you could downlaod this repo to use it for now, just needs to pay attention to the update.",
   "main": "index.js",
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --build --clean && tsc --build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
