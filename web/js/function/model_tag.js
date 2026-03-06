@@ -1,9 +1,10 @@
-// @ts-expect-error ComfyUI runtime-provided module
+// @ts-expect-error ComfyUI 运行时注入模块
 import { app } from "/scripts/app.js";
-import { getModelFromNode, getTagsDB, initConfig, isModelLoaderNode, } from "./config_model.js";
+import { getModelFromNode, getTagsDB, initConfig, isModelLoaderNode } from "./config_model.js";
 import { showEditor } from "./editor_window.js";
 import { showManager } from "./manager_window.js";
 import { setupTagInjector } from "./tag_injector.js";
+import { initGlobalThemeCSSVar, injectCSS } from "../theme/themeWatcher.js";
 let initialized = false;
 async function ensureInit() {
     if (!initialized) {
@@ -14,6 +15,8 @@ async function ensureInit() {
 app.registerExtension({
     name: "a1rworkshop.modeltag",
     async setup() {
+        initGlobalThemeCSSVar();
+        injectCSS("../../css/a1r-model-tag.css", import.meta.url);
         await ensureInit();
         setupTagInjector();
     },

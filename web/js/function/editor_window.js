@@ -1,9 +1,6 @@
-import { ModelMetadata, collectModelsFromGraph, getModelFromNode, getModelListFromNode, getModelWidgetName, getTagsDB, saveConfig, } from "./config_model.js";
-// @ts-expect-error ComfyUI runtime-provided module
-import { app } from "/scripts/app.js";
+import { ModelMetadata, fetchAllModelsFromAPI, getModelFromNode, getModelListFromNode, getModelWidgetName, getTagsDB, saveConfig, } from "./config_model.js";
 import { createCombo, createContainer, createLabel, createTextarea, showToast, } from "../theme/themeUtils.js";
 import { DialogBuilder, DIALOG_TYPE } from "../theme/dialog.js";
-import { resolveThemeToken } from "../theme/themeWatcher.js";
 export const EDITOR_MODE = {
     NODE_CONTEXT: "node_context",
     MANAGER_EDIT: "manager_edit",
@@ -15,7 +12,7 @@ export function showEditor(node) {
         node,
     });
 }
-export function createTagsEditor(options = {}) {
+export async function createTagsEditor(options = {}) {
     const { mode = EDITOR_MODE.NODE_CONTEXT, node = null, entry = null, category = null, onSave = null, onClose = null, } = options;
     const db = getTagsDB();
     let config = {
@@ -77,7 +74,7 @@ export function createTagsEditor(options = {}) {
                 modelList: [],
                 displayValue: "",
             };
-            const modelsByCategory = collectModelsFromGraph(app);
+            const modelsByCategory = await fetchAllModelsFromAPI();
             modelsByCategory.forEach((modelsMap, group) => {
                 modelsMap.forEach((metadata, path) => {
                     config.modelList.push({ path, metadata, group });
@@ -93,16 +90,8 @@ export function createTagsEditor(options = {}) {
             break;
         }
     }
-    const content = createContainer({}, {
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "stretch",
-        minHeight: "unset",
-        gap: "16px",
-        width: "100%",
-        padding: "0",
-        background: "transparent",
-    });
+    const content = document.createElement("div");
+    content.className = "a1r-editor-content";
     const modelSection = createModelSection({
         mode: config.allowModelSelect ? "select" : "display",
         modelList: config.modelList,
@@ -146,7 +135,7 @@ export function createTagsEditor(options = {}) {
         if (config.allowModelSelect) {
             const selectedModel = selector?.value || config.currentModel;
             if (!selectedModel) {
-                showToast({}, {}, "Please select a model", "error");
+                showToast("Please select a model", "error");
                 return false;
             }
             const selectedOption = selector?.selectedOptions?.[0];
@@ -156,12 +145,12 @@ export function createTagsEditor(options = {}) {
             const storagePath = metadata.getStoragePath();
             if (mode === EDITOR_MODE.MANAGER_ADD) {
                 db.add(metadata, tags);
-                showToast({}, {}, `Added: ${metadata.getDisplayName()}`, "success");
+                showToast(`Added: ${metadata.getDisplayName()}`, "success");
                 onSave?.({ model: storagePath, tags, category: finalCategory });
                 return true;
             }
             if (!tags.positive && !tags.negative) {
-                showToast({}, {}, "Tags are empty, entry not saved", "info");
+                showToast("Tags are empty, entry not saved", "info");
                 return true;
             }
             const existing = db.findByModelName(selectedModel);
@@ -172,7 +161,7 @@ export function createTagsEditor(options = {}) {
                 db.add(metadata, tags);
             }
             await saveConfig();
-            showToast({}, {}, `Saved for ${metadata.getDisplayName()}`, "success");
+            showToast(`Saved for ${metadata.getDisplayName()}`, "success");
             onSave?.({ model: storagePath, tags, category: finalCategory });
             return true;
         }
@@ -180,7 +169,7 @@ export function createTagsEditor(options = {}) {
         const finalCategory = category || metadata.getCategory();
         const storagePath = metadata.getStoragePath();
         if (!tags.positive && !tags.negative) {
-            showToast({}, {}, "Tags are empty, entry not saved", "info");
+            showToast("Tags are empty, entry not saved", "info");
             return true;
         }
         const existing = db.findByModelName(config.currentModel);
@@ -191,7 +180,7 @@ export function createTagsEditor(options = {}) {
             db.add(metadata, tags);
         }
         await saveConfig();
-        showToast({}, {}, `Saved for ${metadata.getDisplayName()}`, "success");
+        showToast(`Saved for ${metadata.getDisplayName()}`, "success");
         onSave?.({ model: storagePath, tags, category: finalCategory });
         return true;
     });
@@ -201,73 +190,41 @@ export function createTagsEditor(options = {}) {
     return builder.open();
 }
 function createModelSection(options) {
-    const theme = resolveThemeToken({});
-    const container = createContainer({}, {
-        // custom css style
-        display: "flex",
-        flex: "1",
-        flexDirection: "column",
-        minHeight: "unset",
-        gap: theme.isClassic ? "8px" : "12px",
-        background: "transparent",
-    });
+    const container = document.createElement("div");
+    container.className = "a1r-editor-section";
     const createRow = () => {
-        const row = createContainer({}, {
-            // custom css style
-            display: "flex",
-            flex: "1",
-            alignItems: "stretch",
-            gap: "8px",
-            background: "transparent",
-        });
-        const label = createLabel("model", {}, {
-            minWidth: theme.isClassic ? "70px" : "80px",
-            marginTop: theme.isClassic ? "6px" : "8px",
-        });
-        const wrapper = createContainer({}, {
-            // custom css style
-            display: "flex",
-            flex: "1",
-            alignItems: "stretch",
-            padding: theme.isClassic ? "4px 6px" : "8px 12px",
-            margin: "0",
-        });
+        const row = document.createElement("div");
+        row.className = "a1r-editor-row";
+        const label = createLabel("model");
+        label.classList.add("a1r-editor-label");
+        const wrapper = createContainer();
+        wrapper.classList.add("a1r-editor-field-wrapper");
         if (options.mode === "display") {
             const display = document.createElement("div");
-            display.textContent = options.displayValue || options.currentModel || "";
-            display.style.cssText = `
-        width: 100%;
-        user-select: none;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        padding: 0 20px;
-      `;
+            display.className = "a1r-editor-model-display";
+            const rawPath = options.displayValue || options.currentModel || "";
+            const fileName = rawPath.split(/[\/\\]/).pop() || rawPath;
+            display.textContent = fileName.replace(/\.(safetensors|ckpt|pt|bin|model|onnx|tflite|gguf|ggjt|gguf2)$/i, "");
             wrapper.appendChild(display);
         }
-        else {
-            const selector = createCombo({}, {
-                // custom css style
-                flex: "1",
-                maxHeight: "20px",
-            });
+        else { // options.mode === "select"
+            const selector = createCombo();
+            selector.classList.add("a1r-editor-model-selector");
             selector.dataset.role = "model-selector";
             options.modelList.forEach((item) => {
                 const option = document.createElement("option");
-                option.style.background = theme.color.background;
                 option.value = item.path;
                 option.textContent = item.group
                     ? `[${item.group}] ${item.metadata.getRelativePath()}`
                     : item.metadata.getRelativePath();
+                option._modelMetadata = item.metadata;
+                option._precomputedCategory = item.group || item.metadata.getCategory();
                 selector.appendChild(option);
             });
+            if (options.currentModel) {
+                selector.value = options.currentModel;
+            }
             selector.addEventListener("change", () => options.onChange?.(selector.value));
-            selector.addEventListener("focus", () => {
-                wrapper.style.outline = `1px solid ${theme.color.text}`;
-            });
-            selector.addEventListener("blur", () => {
-                wrapper.style.outline = "none";
-            });
             wrapper.appendChild(selector);
         }
         row.appendChild(label);
@@ -278,55 +235,21 @@ function createModelSection(options) {
     return container;
 }
 function createTagSection(initialTags) {
-    const theme = resolveThemeToken({});
-    const container = createContainer({}, {
-        // custom css style
-        display: "flex",
-        flex: "1",
-        flexDirection: "column",
-        minHeight: "unset",
-        gap: theme.isClassic ? "8px" : "12px",
-        background: "transparent",
-    });
+    const container = document.createElement("div");
+    container.className = "a1r-editor-section";
     const createRow = (labelStr, value, role) => {
-        const row = createContainer({}, {
-            // custom css style
-            display: "flex",
-            flex: "1",
-            alignItems: "stretch",
-            minHeight: "100px",
-            gap: "8px",
-            background: "transparent",
-        });
-        const label = createLabel(labelStr, {}, {
-            // custom css style
-            minWidth: theme.isClassic ? "70px" : "80px",
-            marginTop: theme.isClassic ? "6px" : "8px",
-        });
-        const wrapper = createContainer({}, {
-            // custom css style
-            display: "flex",
-            flex: "1",
-            alignItems: "stretch",
-            padding: theme.isClassic ? "4px 6px" : "8px 12px",
-            margin: "0",
-        });
-        const textarea = createTextarea({}, {
-            // custom css style
-            flex: "1",
-            minHeight: "80px",
-            resize: "vertical",
-        });
+        const row = document.createElement("div");
+        row.className = "a1r-editor-tag-row";
+        const label = createLabel(labelStr);
+        label.classList.add("a1r-editor-label");
+        const wrapper = createContainer();
+        wrapper.classList.add("a1r-editor-field-wrapper");
+        const textarea = createTextarea();
+        textarea.classList.add("a1r-editor-textarea");
         textarea.dataset.role = role;
         textarea.value = value;
         textarea.placeholder = "text";
         textarea.spellcheck = false;
-        textarea.addEventListener("focus", () => {
-            wrapper.style.outline = `1px solid ${theme.color.text}`;
-        });
-        textarea.addEventListener("blur", () => {
-            wrapper.style.outline = "none";
-        });
         wrapper.appendChild(textarea);
         row.appendChild(label);
         row.appendChild(wrapper);

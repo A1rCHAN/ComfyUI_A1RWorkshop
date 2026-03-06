@@ -1,56 +1,3 @@
-import { getWidgetStructure } from "./themeStyle.js";
-import { watchThemeToken, } from "./themeWatcher.js";
-/**
- * 配置颜色属性
- * @param theme
- * @returns CSS 颜色属性对象
- */
-function createThemeStyle(theme) {
-    const boxShadow = `0 8px 24px ${hexToRGBA(theme.color.shadow, 0.3)}`;
-    return {
-        toast: {
-            background: theme.color.title,
-            color: theme.color.text,
-            border: theme.isClassic ? `1px solid ${theme.color.border}` : "none",
-            boxShadow: boxShadow,
-        },
-        overlay: {
-            background: hexToRGBA(theme.color.shadow, 0.3),
-        },
-        dialog: {
-            background: theme.color.background,
-            color: theme.color.text,
-            border: theme.isClassic ? `1px solid ${theme.color.border}` : "none",
-            boxShadow: boxShadow,
-        },
-        container: {
-            background: theme.color.border,
-            borderColor: "transparent",
-            outline: "none",
-        },
-        combo: {
-            background: "transparent",
-            color: theme.color.text,
-            outline: "none",
-            border: "none",
-        },
-        textarea: {
-            background: "transparent",
-            color: theme.color.text,
-            outline: "none",
-            border: "none",
-        },
-        button: {
-            background: theme.color.border,
-            color: theme.color.text,
-            outline: "none",
-            border: "none",
-        },
-        label: {
-            color: theme.color.text,
-        },
-    };
-}
 export function hexToRGBA(hex, alpha = 1) {
     if (!hex)
         return `rgba(0, 0, 0, ${alpha})`;
@@ -69,36 +16,17 @@ export function hexToRGBA(hex, alpha = 1) {
     }
     return `rgba(${R}, ${G}, ${B}, ${alpha})`;
 }
-function bindThemeSync(element, widgetKey, themeConfig, customStyle) {
-    return watchThemeToken((token) => {
-        element.className = `a1r-${widgetKey} ${token.mode}`;
-        Object.assign(element.style, getWidgetStructure(token.isClassic)[widgetKey]);
-        Object.assign(element.style, createThemeStyle(token)[widgetKey]);
-        Object.assign(element.style, customStyle);
-    }, themeConfig);
-}
-export function showToast(theme = {}, customStyle = {}, message, type = "success", duration = 2500) {
+export function showToast(message, type = "success", duration = 2500, customStyle = {}) {
     const el = document.createElement("div");
     el.textContent = message;
-    const stopWatch = watchThemeToken((token) => {
-        const structure = getWidgetStructure(token.isClassic)["toast"];
-        const themeStyle = createThemeStyle(token)["toast"];
-        const typeColor = type === "success" ? token.color.background
-            : type === "error" ? token.color.warning
-                : token.color.prompt;
-        el.className = `a1r-toast ${token.mode}`;
-        Object.assign(el.style, structure);
-        Object.assign(el.style, themeStyle);
-        el.style.background = typeColor;
-        Object.assign(el.style, customStyle);
-    }, theme);
+    el.className = `a1r-toast a1r-toast--${type}`;
+    Object.assign(el.style, customStyle);
     el.style.opacity = "0";
     el.style.transform = "translateX(-50%) translateY(-20px)";
     const remove = () => {
         el.style.opacity = "0";
         el.style.transform = "translateX(-50%) translateY(-20px)";
         setTimeout(() => {
-            stopWatch();
             el.remove();
         }, 300);
     };
@@ -113,59 +41,47 @@ export function showToast(theme = {}, customStyle = {}, message, type = "success
     }
     return el;
 }
-export function createOverlay(theme = {}, customStyle = {}) {
+export function createOverlay(customStyle = {}) {
     const el = document.createElement('div');
-    const stopWatch = bindThemeSync(el, "overlay", theme, customStyle);
-    el.__a1rStopThemeWatch = stopWatch;
+    el.className = 'a1r-overlay';
+    Object.assign(el.style, customStyle);
     return el;
 }
-export function createDialog(theme = {}, customStyle = {}) {
+export function createDialog(customStyle = {}) {
     const el = document.createElement('div');
-    const stopWatch = bindThemeSync(el, "dialog", theme, customStyle);
-    el.__a1rStopThemeWatch = stopWatch;
+    el.className = 'a1r-dialog';
+    Object.assign(el.style, customStyle);
     return el;
 }
-export function createContainer(theme = {}, customStyle = {}) {
+export function createContainer(customStyle = {}) {
     const el = document.createElement('div');
-    const stopWatch = bindThemeSync(el, "container", theme, customStyle);
-    el.__a1rStopThemeWatch = stopWatch;
+    el.className = 'a1r-container';
+    Object.assign(el.style, customStyle);
     return el;
 }
-export function createButton(label, theme = {}, customStyle = {}) {
+export function createButton(label, customStyle = {}) {
     const el = document.createElement('button');
     el.textContent = label;
-    const stopWatch = bindThemeSync(el, "button", theme, customStyle);
-    el.addEventListener("mouseenter", () => {
-        el.style.filter = "brightness(1.2)";
-    });
-    el.addEventListener("mouseleave", () => {
-        el.style.filter = "none";
-    });
-    el.__a1rStopThemeWatch = stopWatch;
+    el.className = 'a1r-button';
+    Object.assign(el.style, customStyle);
     return el;
 }
-export function createLabel(text, theme = {}, customStyle = {}) {
+export function createLabel(text, customStyle = {}) {
     const el = document.createElement('label');
     el.textContent = text;
-    const stopWatch = bindThemeSync(el, "label", theme, customStyle);
-    el.__a1rStopThemeWatch = stopWatch;
+    el.className = 'a1r-label';
+    Object.assign(el.style, customStyle);
     return el;
 }
-export function createCombo(theme = {}, customStyle = {}) {
+export function createCombo(customStyle = {}) {
     const el = document.createElement("select");
-    const stopWatch = bindThemeSync(el, "combo", theme, customStyle);
-    el.addEventListener("mouseenter", () => {
-        el.style.filter = "brightness(2)";
-    });
-    el.addEventListener("mouseleave", () => {
-        el.style.filter = "none";
-    });
-    el.__a1rStopThemeWatch = stopWatch;
+    el.className = 'a1r-combo';
+    Object.assign(el.style, customStyle);
     return el;
 }
-export function createTextarea(theme = {}, customStyle = {}) {
+export function createTextarea(customStyle = {}) {
     const el = document.createElement("textarea");
-    const stopWatch = bindThemeSync(el, "textarea", theme, customStyle);
-    el.__a1rStopThemeWatch = stopWatch;
+    el.className = 'a1r-textarea';
+    Object.assign(el.style, customStyle);
     return el;
 }

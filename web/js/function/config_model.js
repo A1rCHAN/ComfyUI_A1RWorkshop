@@ -7,7 +7,7 @@ let _loadPromise = null;
 const _changeListeners = new Set();
 let _lastSavedJSON = null;
 function showToast(message, type = "success", duration = 2500) {
-    themedShowToast({}, {}, message, type, duration);
+    themedShowToast(message, type, duration);
 }
 function isRecord(value) {
     return typeof value === "object" && value !== null;
@@ -714,6 +714,54 @@ export async function saveFilteredConfig(db) {
         return false;
     }
 }
+const BACKEND_FOLDER_TO_CATEGORY = {
+    checkpoints: "checkpoints",
+    loras: "loras",
+    vae: "vaes",
+    diffusion_models: "unets",
+    text_encoders: "clips",
+    controlnet: "controlnets",
+    upscale_models: "upscalers",
+};
+export async function fetchAllModelsFromAPI() {
+    const modelsByCategory = new Map();
+    try {
+        const typesResponse = await fetch("/models");
+        if (!typesResponse.ok)
+            return modelsByCategory;
+        const folderNames = await typesResponse.json();
+        const relevantFolders = folderNames.filter((f) => f in BACKEND_FOLDER_TO_CATEGORY);
+        const results = await Promise.all(relevantFolders.map(async (folder) => {
+            try {
+                const res = await fetch(`/models/${encodeURIComponent(folder)}`);
+                if (!res.ok)
+                    return { folder, files: [] };
+                const files = await res.json();
+                return { folder, files };
+            }
+            catch {
+                return { folder, files: [] };
+            }
+        }));
+        for (const { folder, files } of results) {
+            const category = BACKEND_FOLDER_TO_CATEGORY[folder];
+            if (!category)
+                continue;
+            const categoryMap = new Map();
+            for (const filePath of files) {
+                const metadata = ModelMetadata.fromJSON({ path: filePath, category });
+                categoryMap.set(filePath, metadata);
+            }
+            if (categoryMap.size > 0) {
+                modelsByCategory.set(category, categoryMap);
+            }
+        }
+    }
+    catch (err) {
+        console.warn("[fetchAllModelsFromAPI] Failed:", err);
+    }
+    return modelsByCategory;
+}
 export default {
     ModelMetadata,
     TagsDatabase,
@@ -725,6 +773,7 @@ export default {
     reloadConfig,
     isConfigReady,
     collectModelsFromGraph,
+    fetchAllModelsFromAPI,
     isModelLoaderNode,
     getModelListFromNode,
     getModelWidgetName,

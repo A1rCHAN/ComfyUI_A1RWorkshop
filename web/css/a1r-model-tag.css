@@ -1,0 +1,347 @@
+/* A1R Model Tag - 编辑器与管理器窗口组件样式 */
+/* 使用 :root 上的 CSS 变量（由 a1r-theme.css + themeWatcher 注入） */
+
+/* ========================================= */
+/* === 编辑器窗口                        === */
+/* ========================================= */
+
+/* 编辑器主内容区 */
+.a1r-editor-content {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: unset;
+  gap: 16px;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+}
+
+/* 区块容器（模型/标签） */
+.a1r-editor-section {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: unset;
+  gap: 12px;
+  background: transparent;
+}
+[data-a1r-mode="classic"] .a1r-editor-section {
+  gap: 8px;
+}
+
+/* 表单行：标签 + 字段 */
+.a1r-editor-row {
+  display: flex;
+  flex: 1;
+  align-items: stretch;
+  gap: 8px;
+  background: transparent;
+}
+
+/* 标签行变体（更高的最小高度） */
+.a1r-editor-tag-row {
+  display: flex;
+  flex: 1;
+  align-items: stretch;
+  min-height: 100px;
+  gap: 8px;
+  background: transparent;
+}
+
+/* 字段标签 */
+.a1r-editor-label {
+  min-width: 80px;
+  margin-top: 8px;
+}
+[data-a1r-mode="classic"] .a1r-editor-label {
+  min-width: 70px;
+  margin-top: 6px;
+}
+
+/* 字段包裹层（包裹下拉框/文本域/展示值） */
+.a1r-editor-field-wrapper {
+  display: flex;
+  flex: 1;
+  align-items: stretch;
+  min-width: 0;
+  padding: 8px 10px;
+  margin: 0;
+  box-sizing: border-box;
+}
+[data-a1r-mode="classic"] .a1r-editor-field-wrapper {
+  padding: 4px 6px;
+}
+.a1r-editor-field-wrapper:focus-within {
+  outline: 1px solid var(--a1r-color-text);
+}
+
+/* 只读模型显示 */
+.a1r-editor-model-display {
+  width: 100%;
+  min-width: 0;
+  padding: 0 10px;
+  box-sizing: border-box;
+  font-size: small;
+  user-select: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 模型选择下拉框 */
+.a1r-editor-model-selector {
+  flex: 1;
+  max-height: 20px;
+  padding: 0 10px;
+  font-size: small;
+}
+.a1r-editor-model-selector option {
+  background: var(--a1r-color-background);
+}
+
+/* 标签文本域 */
+.a1r-editor-textarea {
+  flex: 1;
+  min-height: 80px;
+  padding: 0 10px;
+  font-size: small;
+  resize: vertical;
+}
+
+/* ========================================= */
+/* === 管理器窗口                        === */
+/* ========================================= */
+
+/* 可滚动内容区 */
+.a1r-manager-content {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 0;
+  max-height: 80vh;
+  overflow-y: auto;
+  gap: 12px;
+  flex: 1;
+  padding: 2px 3px;
+  box-sizing: border-box;
+  background: transparent;
+}
+
+/* 列表包裹层 */
+.a1r-manager-list {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  min-height: unset;
+  padding: 2px 3px;
+  box-sizing: border-box;
+  background: transparent;
+}
+
+/* 分类分组容器 */
+.a1r-manager-category {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-height: unset;
+  padding: 0;
+  background: transparent;
+}
+
+/* 条目容器（展开/折叠动画） */
+.a1r-manager-entries {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-height: unset;
+  overflow: hidden;
+  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+              margin 0.25s ease;
+  background: transparent;
+}
+
+/* 分类标题栏 */
+.a1r-manager-category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: var(--a1r-radius-md);
+  cursor: pointer;
+  user-select: none;
+  transition: outline 0.15s ease, background-color 0.15s ease, opacity 0.15s ease;
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+  gap: 12px;
+  background: transparent;
+  min-height: unset;
+  box-sizing: border-box;
+}
+[data-a1r-mode="classic"] .a1r-manager-category-header {
+  padding: 6px 10px;
+  border-radius: 0;
+}
+.a1r-manager-category-header:hover {
+  background-color: color-mix(in srgb, var(--a1r-color-menu) 80%, transparent);
+}
+
+/* 标题栏左侧区域 */
+.a1r-manager-category-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  overflow: hidden;
+  min-height: unset;
+  padding: 0;
+  background: transparent;
+}
+
+/* 展开/折叠三角图标 */
+.a1r-manager-triangle {
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  color: var(--a1r-color-text);
+}
+
+/* 分类名称文本 */
+.a1r-manager-category-label {
+  color: var(--a1r-color-text);
+  font-size: small;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--a1r-font);
+}
+[data-a1r-mode="classic"] .a1r-manager-category-label {
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+
+/* 条目数量徽标 */
+.a1r-manager-badge {
+  color: var(--a1r-color-text);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--a1r-color-text) 15%, transparent);
+  flex-shrink: 0;
+}
+[data-a1r-mode="classic"] .a1r-manager-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 0;
+}
+
+/* 单个模型条目 */
+.a1r-manager-list-item {
+  position: relative;
+  padding: 10px 14px;
+  border: none;
+  border-radius: var(--a1r-radius-md);
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: unset;
+  box-sizing: border-box;
+  background: var(--a1r-color-background);
+}
+.a1r-manager-list-item:hover:not(.a1r-manager-list-item--selected) {
+  background: var(--a1r-color-border);
+}
+[data-a1r-mode="classic"] .a1r-manager-list-item:hover:not(.a1r-manager-list-item--selected) {
+  background: color-mix(in srgb, var(--a1r-color-border) 85%, transparent);
+}
+
+/* 选中态 */
+.a1r-manager-list-item--selected {
+  box-shadow: inset 0 0 0 2px var(--a1r-color-prompt);
+  background: color-mix(in srgb, var(--a1r-color-prompt) 8%, transparent);
+}
+
+/* 条目内容布局 */
+.a1r-manager-item-content {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  overflow: hidden;
+  min-height: unset;
+  padding: 0 0 0 10px;
+  background: transparent;
+}
+
+/* 模型名称文本 */
+.a1r-manager-item-name {
+  color: var(--a1r-color-text);
+  font-size: smaller;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* 预览/路径文本 */
+.a1r-manager-item-preview {
+  color: var(--a1r-color-text);
+  font-size: 11px;
+  opacity: 0.6;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-left: 12px;
+  user-select: none;
+}
+
+/* 空状态 */
+.a1r-manager-empty {
+  min-height: 80px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: transparent;
+}
+.a1r-manager-empty-label {
+  min-width: unset;
+  opacity: 0.6;
+  font-style: italic;
+}
+
+/* 新增按钮行 */
+.a1r-manager-add-row {
+  min-height: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  background: transparent;
+}
+
+/* 新增按钮 */
+.a1r-manager-add-btn {
+  min-height: 30px;
+  min-width: 100%;
+  max-width: 100%;
+  flex: 1;
+  font-size: 18px;
+  line-height: 1;
+}

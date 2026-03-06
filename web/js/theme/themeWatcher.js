@@ -1,5 +1,6 @@
 import { FRONTEND_TYPE, THEME_STYLES, THEME_STYLE_CHANGE_EVENT, THEME_STYLE_STORAGE_KEY, getCurrentStyle, } from "./themeStyle.js";
 import { getThemeColor, isThemeName, } from "./themeColor.js";
+import { hexToRGBA } from "./themeUtils.js";
 const COLOR_KEYS = [
     "name",
     "menu",
@@ -36,7 +37,7 @@ function readThemeNameFromDOM() {
                 return normalized;
         }
     }
-    catch { /* ignore */ }
+    catch { /* 忽略异常 */ }
     // 2. data-theme 属性回退
     const raw = document.documentElement.getAttribute("data-theme") ||
         document.body.getAttribute("data-theme") ||
@@ -149,4 +150,38 @@ export function watchThemeToken(cb, theme = {}) {
         window.clearInterval(timer);
         window.clearInterval(settingsInterval);
     };
+}
+const injectedCSS = new Set();
+export function injectCSS(relativePath, baseUrl) {
+    const href = new URL(relativePath, baseUrl).href;
+    if (injectedCSS.has(href))
+        return;
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
+    link.type = "text/css";
+    link.href = href;
+    document.head.appendChild(link);
+    injectedCSS.add(href);
+}
+function injectThemeCSS() {
+    injectCSS("../../css/a1r-theme.css", import.meta.url);
+}
+export function initGlobalThemeCSSVar(themeConfig = {}) {
+    injectThemeCSS();
+    return watchThemeToken((token) => {
+        const root = document.documentElement;
+        root.style.setProperty('--a1r-font', token.fontFamily);
+        root.style.setProperty('--a1r-transition', token.transition);
+        root.style.setProperty('--a1r-radius-sm', token.radius.sm);
+        root.style.setProperty('--a1r-radius-md', token.radius.md);
+        root.style.setProperty('--a1r-radius-lg', token.radius.lg);
+        root.style.setProperty('--a1r-radius-xl', token.radius.xl);
+        root.style.setProperty('--a1r-border-width', token.isClassic ? '1px' : '0px');
+        root.dataset.a1rMode = token.mode;
+        for (const [key, value] of Object.entries(token.color)) {
+            root.style.setProperty(`--a1r-color-${key}`, value);
+        }
+        root.style.setProperty('--a1r-color-shadow-alpha', hexToRGBA(token.color.shadow, 0.3));
+        root.style.setProperty('--a1r-color-bg-alpha', hexToRGBA(token.color.shadow, 0.3));
+    }, themeConfig);
 }

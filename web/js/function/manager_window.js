@@ -1,12 +1,16 @@
 import { getTagsDB, saveFilteredConfig } from "./config_model.js";
 import { createTagsEditor, EDITOR_MODE } from "./editor_window.js";
-import { createButton, createContainer, createLabel, hexToRGBA, showToast, } from "../theme/themeUtils.js";
+import { createButton, createLabel, showToast, } from "../theme/themeUtils.js";
 import { DialogBuilder, DIALOG_TYPE } from "../theme/dialog.js";
-import { resolveThemeToken } from "../theme/themeWatcher.js";
+export const MANAGER_MODE = {
+    DEFAULT: "default",
+};
 export function showManager() {
+    return createTagsManager();
+}
+export function createTagsManager(options = {}) {
+    const { mode = MANAGER_MODE.DEFAULT, onClose = null, } = options;
     const db = getTagsDB();
-    const token = resolveThemeToken({});
-    const isClassic = token.isClassic;
     const selectedItems = new Set();
     const listItemElements = new Map();
     const categoryExpandedState = new Map();
@@ -19,7 +23,7 @@ export function showManager() {
         selectedItems.clear();
         updateRemoveButtonVisibility();
         listItemElements.forEach((element, key) => {
-            updateListItemVisual(element, key, false, selectedItems, token.color.prompt, token.color.background);
+            updateListItemVisual(element, key, false, selectedItems);
         });
     };
     const updateRemoveButtonVisibility = () => {
@@ -27,33 +31,16 @@ export function showManager() {
             return;
         removeButton.style.display = selectMode && selectedItems.size > 0 ? "flex" : "none";
     };
-    const content = createContainer({}, {
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "stretch",
-        minHeight: "0",
-        maxHeight: "80vh",
-        overflowY: "auto",
-        gap: "12px",
-        flex: "1",
-        padding: "2px 3px",
-        background: "transparent",
-    });
+    const content = document.createElement("div");
+    content.className = "a1r-manager-content";
     const renderList = () => {
         content.innerHTML = "";
         listItemElements.forEach((element) => {
             element._cleanup?.();
         });
         listItemElements.clear();
-        const wrapper = createContainer({}, {
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "stretch",
-            gap: "8px",
-            minHeight: "unset",
-            padding: "2px 3px",
-            background: "transparent",
-        });
+        const wrapper = document.createElement("div");
+        wrapper.className = "a1r-manager-list";
         const categories = db.getCategories();
         let totalValidEntries = 0;
         categories.forEach((category) => {
@@ -65,37 +52,31 @@ export function showManager() {
             if (!categoryExpandedState.has(category)) {
                 categoryExpandedState.set(category, true);
             }
-            const categoryContainer = createContainer({}, {
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "stretch",
-                gap: "4px",
-                minHeight: "unset",
-                padding: "0",
-                background: "transparent",
-            });
-            const entriesContainer = createContainer({}, {
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "stretch",
-                gap: "4px",
-                minHeight: "unset",
-                overflow: "hidden",
-                marginTop: categoryExpandedState.get(category) ? "4px" : "0",
-                visibility: categoryExpandedState.get(category) ? "visible" : "hidden",
-                maxHeight: categoryExpandedState.get(category) ? "none" : "0px",
-                opacity: categoryExpandedState.get(category) ? "1" : "0",
-                transition: "max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1), margin 0.25s ease",
-                background: "transparent",
-            });
+            const categoryContainer = document.createElement("div");
+            categoryContainer.className = "a1r-manager-category";
+            const entriesContainer = document.createElement("div");
+            entriesContainer.className = "a1r-manager-entries";
+            const isExpanded = categoryExpandedState.get(category);
+            if (isExpanded) {
+                entriesContainer.style.maxHeight = "none";
+                entriesContainer.style.opacity = "1";
+                entriesContainer.style.marginTop = "4px";
+                entriesContainer.style.visibility = "visible";
+            }
+            else {
+                entriesContainer.style.maxHeight = "0px";
+                entriesContainer.style.opacity = "0";
+                entriesContainer.style.marginTop = "0";
+                entriesContainer.style.visibility = "hidden";
+            }
             const categoryKeys = validEntries.map(([id]) => `${category}:${id}`);
-            const categoryHeader = createCategoryHeader(category, validEntries.length, categoryExpandedState.get(category) ?? true, entriesContainer, categoryExpandedState, token, isClassic, () => selectMode, categoryKeys, selectedItems, (keys) => {
+            const categoryHeader = createCategoryHeader(category, validEntries.length, categoryExpandedState.get(category) ?? true, entriesContainer, categoryExpandedState, () => selectMode, categoryKeys, selectedItems, (keys) => {
                 keys.forEach((k) => selectedItems.add(k));
                 updateRemoveButtonVisibility();
                 keys.forEach((k) => {
                     const element = listItemElements.get(k);
                     if (element) {
-                        updateListItemVisual(element, k, true, selectedItems, token.color.prompt, token.color.background);
+                        updateListItemVisual(element, k, true, selectedItems);
                     }
                 });
             }, (keys) => {
@@ -109,7 +90,7 @@ export function showManager() {
                 keys.forEach((k) => {
                     const element = listItemElements.get(k);
                     if (element) {
-                        updateListItemVisual(element, k, true, selectedItems, token.color.prompt, token.color.background);
+                        updateListItemVisual(element, k, true, selectedItems);
                     }
                 });
             }, (keys) => {
@@ -119,12 +100,12 @@ export function showManager() {
                 keys.forEach((k) => {
                     const element = listItemElements.get(k);
                     if (element) {
-                        updateListItemVisual(element, k, true, selectedItems, token.color.prompt, token.color.background);
+                        updateListItemVisual(element, k, true, selectedItems);
                     }
                 });
             });
             validEntries.forEach(([id, entry]) => {
-                const item = createListItem(category, id, entry, token, isClassic, () => selectMode, selectedItems, listItemElements, () => {
+                const item = createListItem(category, id, entry, () => selectMode, selectedItems, listItemElements, () => {
                     if (selectedItems.size === 0) {
                         exitSelectMode();
                     }
@@ -146,7 +127,7 @@ export function showManager() {
                     updateRemoveButtonVisibility();
                     const element = listItemElements.get(key);
                     if (element) {
-                        updateListItemVisual(element, key, true, selectedItems, token.color.prompt, token.color.background);
+                        updateListItemVisual(element, key, true, selectedItems);
                     }
                 });
                 entriesContainer.appendChild(item);
@@ -156,48 +137,22 @@ export function showManager() {
             wrapper.appendChild(categoryContainer);
         });
         if (totalValidEntries === 0) {
-            const empty = createContainer({}, {
-                minHeight: "80px",
-                justifyContent: "center",
-                alignItems: "center",
-                background: "transparent",
-            });
-            empty.appendChild(createLabel("No models with tags found.", {}, {
-                minWidth: "unset",
-                opacity: "0.6",
-                fontStyle: "italic",
-            }));
-            wrapper.appendChild(empty);
+            wrapper.appendChild(createEmptyState());
         }
-        const addRow = createContainer({}, {
-            minHeight: "40px",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            gap: "8px",
-            padding: "0",
-            background: "transparent",
-        });
-        const addButton = createButton("+", {}, {
-            minHeight: "30px",
-            minWidth: "100%", maxWidth: "100%", flex: "1",
-            fontSize: "18px",
-            lineHeight: "1",
-        });
-        addButton.addEventListener("click", async () => {
-            exitSelectMode();
-            await createTagsEditor({
-                mode: EDITOR_MODE.MANAGER_ADD,
-                onSave: () => renderList(),
-            });
-        });
-        addRow.appendChild(addButton);
-        wrapper.appendChild(addRow);
+        wrapper.appendChild(createAddRow({
+            onAdd: async () => {
+                exitSelectMode();
+                await createTagsEditor({
+                    mode: EDITOR_MODE.MANAGER_ADD,
+                    onSave: () => renderList(),
+                });
+            }
+        }));
         content.appendChild(wrapper);
     };
     const deleteSelectedItems = () => {
         if (selectedItems.size === 0) {
-            showToast({}, {}, "No items selected", "error");
+            showToast("No items selected", "error");
             return;
         }
         if (!confirm(`Delete ${selectedItems.size} selected item(s)?`))
@@ -211,7 +166,7 @@ export function showManager() {
             selectMode = false;
             selectedItems.clear();
             updateRemoveButtonVisibility();
-            showToast({}, {}, `Removed ${itemsToDelete.length} item(s). Apply or Save to confirm.`, "info");
+            showToast(`Removed ${itemsToDelete.length} item(s). Apply or Save to confirm.`, "info");
             renderList();
         }
     };
@@ -246,7 +201,7 @@ export function showManager() {
         exitSelectMode();
         const result = await saveFilteredConfig(db);
         if (result === "unchanged") {
-            showToast({}, {}, "Nothing has changed", "info");
+            showToast("Nothing has changed", "info");
         }
         return false;
     })
@@ -254,12 +209,13 @@ export function showManager() {
         exitSelectMode();
         const result = await saveFilteredConfig(db);
         if (result === "unchanged") {
-            showToast({}, {}, "Nothing has changed", "info");
+            showToast("Nothing has changed", "info");
         }
         dialog.close(true);
         return false;
     });
     builder.onClose(() => {
+        onClose?.();
         exitSelectMode();
         setTimeout(() => {
             listItemElements.forEach((element) => {
@@ -269,45 +225,14 @@ export function showManager() {
     });
     return builder.open();
 }
-function createCategoryHeader(category, itemCount, initialExpanded, entriesContainer, stateMap, token, isClassic, getSelectMode, categoryKeys, selectedItems, selectAll, deselectAll, onLongPress) {
-    const header = createContainer({}, {
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: isClassic ? "6px 10px" : "8px 12px",
-        borderRadius: isClassic ? "0px" : "6px",
-        cursor: "pointer",
-        userSelect: "none",
-        transition: "outline 0.15s ease, background-color 0.15s ease, opacity 0.15s ease",
-        outline: "2px solid transparent",
-        outlineOffset: "-2px",
-        gap: "12px",
-        background: "transparent",
-        minHeight: "unset",
-    });
-    const leftSection = createContainer({}, {
-        display: "flex",
-        alignItems: "center",
-        gap: "10px",
-        flex: "1",
-        overflow: "hidden",
-        minHeight: "unset",
-        padding: "0",
-        background: "transparent",
-    });
-    const triangleWrapper = createContainer({}, {
-        width: "14px",
-        height: "14px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexShrink: "0",
-        transition: "transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-        transform: initialExpanded ? "rotate(90deg)" : "rotate(0deg)",
-        minHeight: "unset",
-        padding: "0",
-        background: "transparent",
-    });
+function createCategoryHeader(category, itemCount, initialExpanded, entriesContainer, stateMap, getSelectMode, categoryKeys, selectedItems, selectAll, deselectAll, onLongPress) {
+    const header = document.createElement("div");
+    header.className = "a1r-manager-category-header";
+    const leftSection = document.createElement("div");
+    leftSection.className = "a1r-manager-category-left";
+    const triangleWrapper = document.createElement("div");
+    triangleWrapper.className = "a1r-manager-triangle";
+    triangleWrapper.style.transform = initialExpanded ? "rotate(90deg)" : "rotate(0deg)";
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
     svg.setAttribute("width", "10");
@@ -315,35 +240,17 @@ function createCategoryHeader(category, itemCount, initialExpanded, entriesConta
     svg.setAttribute("viewBox", "0 0 10 10");
     const svgPath = document.createElementNS(svgNS, "path");
     svgPath.setAttribute("d", "M2 1.5 L8 5 L2 8.5 Q1.5 9 1 8.5 Q0.5 8 1 7.5 L5 5 L1 2.5 Q0.5 2 1 1.5 Q1.5 1 2 1.5 Z");
-    svgPath.setAttribute("fill", token.color.text);
+    svgPath.setAttribute("fill", "currentColor");
     svg.appendChild(svgPath);
     triangleWrapper.appendChild(svg);
     const categoryLabel = document.createElement("span");
+    categoryLabel.className = "a1r-manager-category-label";
     categoryLabel.textContent = category;
-    categoryLabel.style.cssText = `
-    color: ${token.color.text};
-    font-size: ${isClassic ? "11px" : "12px"};
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: ${isClassic ? "0.5px" : "1px"};
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-family: ${isClassic ? "Courier New, monospace" : "system-ui"};
-  `;
     leftSection.appendChild(triangleWrapper);
     leftSection.appendChild(categoryLabel);
     const badge = document.createElement("span");
+    badge.className = "a1r-manager-badge";
     badge.textContent = String(itemCount);
-    badge.style.cssText = `
-    color: ${token.color.text};
-    font-size: ${isClassic ? "10px" : "11px"};
-    font-weight: 500;
-    padding: ${isClassic ? "2px 6px" : "2px 8px"};
-    border-radius: ${isClassic ? "0px" : "10px"};
-    background: ${hexToRGBA(token.color.text, 0.15)};
-    flex-shrink: 0;
-  `;
     header.appendChild(leftSection);
     header.appendChild(badge);
     let isExpanded = initialExpanded;
@@ -393,11 +300,7 @@ function createCategoryHeader(category, itemCount, initialExpanded, entriesConta
             entriesContainer.addEventListener("transitionend", onEnd);
         }
     };
-    header.addEventListener("mouseenter", () => {
-        header.style.backgroundColor = hexToRGBA(token.color.title, 0.8);
-    });
     header.addEventListener("mouseleave", () => {
-        header.style.backgroundColor = "transparent";
         header.style.outline = "2px solid transparent";
     });
     header.addEventListener("click", (event) => {
@@ -423,7 +326,7 @@ function createCategoryHeader(category, itemCount, initialExpanded, entriesConta
         if (event.button !== 0)
             return;
         isLongPress = false;
-        header.style.outline = `2px solid ${token.color.text}`;
+        header.style.outline = "2px solid var(--a1r-color-text)";
         longPressTimer = window.setTimeout(() => {
             longPressTimer = null;
             isLongPress = true;
@@ -459,58 +362,21 @@ function createCategoryHeader(category, itemCount, initialExpanded, entriesConta
     });
     return header;
 }
-function createListItem(category, id, entry, token, isClassic, getSelectMode, selectedItems, listItemElements, onSelectionChange, onClick, onLongPress) {
+function createListItem(category, id, entry, getSelectMode, selectedItems, listItemElements, onSelectionChange, onClick, onLongPress) {
     const key = `${category}:${id}`;
-    const wrapper = createContainer({}, {
-        position: "relative",
-        padding: "10px 14px",
-        border: "none",
-        borderRadius: isClassic ? "0px" : "6px",
-        cursor: "pointer",
-        transition: "background 0.2s, box-shadow 0.15s",
-        display: "flex",
-        alignItems: "center",
-        gap: "10px",
-        minHeight: "unset",
-        background: token.color.background,
-    });
-    const contentElement = createContainer({}, {
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        flex: "1",
-        overflow: "hidden",
-        minHeight: "unset",
-        padding: "0",
-        background: "transparent",
-    });
+    const wrapper = document.createElement("div");
+    wrapper.className = "a1r-manager-list-item";
+    const contentElement = document.createElement("div");
+    contentElement.className = "a1r-manager-item-content";
     const storagePath = entry.Model || "";
     const fileName = storagePath.split(/[\/\\]/).pop() || storagePath;
     const displayName = fileName.replace(/\.(safetensors|sft|pt|pth|ckpt|bin|gguf|onnx|model)$/i, "");
     const nameElement = document.createElement("span");
+    nameElement.className = "a1r-manager-item-name";
     nameElement.textContent = displayName;
-    nameElement.style.cssText = `
-    color: ${token.color.text};
-    font-size: 13px;
-    font-weight: 500;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    user-select: none;
-  `;
     const subFolder = storagePath.split(/[\/\\]/).slice(0, -1).join("/");
     const previewElement = document.createElement("span");
-    previewElement.style.cssText = `
-    color: ${token.color.text};
-    font-size: 11px;
-    opacity: 0.6;
-    max-width: 120px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    margin-left: 12px;
-    user-select: none;
-  `;
+    previewElement.className = "a1r-manager-item-preview";
     const tagsText = entry.Tags?.positive || entry.Tags?.negative || "";
     previewElement.textContent = subFolder || (tagsText ? `${tagsText.substring(0, 25)}${tagsText.length > 25 ? "..." : ""}` : "No tags");
     contentElement.appendChild(nameElement);
@@ -527,17 +393,6 @@ function createListItem(category, id, entry, token, isClassic, getSelectMode, se
             isLongPress = false;
         }
     };
-    wrapper.addEventListener("mouseenter", () => {
-        if (!(getSelectMode() && selectedItems.has(key))) {
-            wrapper.style.background = hexToRGBA(token.color.border, isClassic ? 0.15 : 0.3);
-        }
-    });
-    wrapper.addEventListener("mouseleave", () => {
-        if (!(getSelectMode() && selectedItems.has(key))) {
-            wrapper.style.background = token.color.background;
-            wrapper.style.boxShadow = "none";
-        }
-    });
     wrapper.addEventListener("pointerdown", (event) => {
         if (event.button !== 0)
             return;
@@ -546,7 +401,7 @@ function createListItem(category, id, entry, token, isClassic, getSelectMode, se
             longPressTimer = null;
             isLongPress = true;
             onLongPress();
-            updateListItemVisual(wrapper, key, true, selectedItems, token.color.prompt, token.color.background);
+            updateListItemVisual(wrapper, key, true, selectedItems);
         }, LONG_PRESS_MS);
     });
     wrapper.addEventListener("pointerup", cancelLongPress);
@@ -568,7 +423,7 @@ function createListItem(category, id, entry, token, isClassic, getSelectMode, se
             else {
                 selectedItems.add(key);
             }
-            updateListItemVisual(wrapper, key, true, selectedItems, token.color.prompt, token.color.background);
+            updateListItemVisual(wrapper, key, true, selectedItems);
             onSelectionChange();
         }
         else {
@@ -580,15 +435,30 @@ function createListItem(category, id, entry, token, isClassic, getSelectMode, se
     };
     return wrapper;
 }
-function updateListItemVisual(element, key, inSelectMode, selectedItems, promptColor, backgroundColor) {
+function updateListItemVisual(element, key, inSelectMode, selectedItems) {
     if (!element)
         return;
     if (inSelectMode && selectedItems.has(key)) {
-        element.style.boxShadow = `inset 0 0 0 2px ${promptColor}`;
-        element.style.background = hexToRGBA(promptColor, 0.08);
+        element.classList.add("a1r-manager-list-item--selected");
     }
     else {
-        element.style.boxShadow = "none";
-        element.style.background = backgroundColor;
+        element.classList.remove("a1r-manager-list-item--selected");
     }
+}
+function createEmptyState() {
+    const empty = document.createElement("div");
+    empty.className = "a1r-manager-empty";
+    const label = createLabel("No models with tags found.");
+    label.classList.add("a1r-manager-empty-label");
+    empty.appendChild(label);
+    return empty;
+}
+function createAddRow(options) {
+    const addRow = document.createElement("div");
+    addRow.className = "a1r-manager-add-row";
+    const addButton = createButton("+");
+    addButton.classList.add("a1r-manager-add-btn");
+    addButton.addEventListener("click", () => options.onAdd());
+    addRow.appendChild(addButton);
+    return addRow;
 }

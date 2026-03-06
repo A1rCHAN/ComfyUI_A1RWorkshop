@@ -1,5 +1,4 @@
-import { createOverlay, createDialog, createContainer, createButton, createLabel, } from "./themeUtils.js";
-import { resolveThemeToken } from "./themeWatcher.js";
+import { createButton, createContainer, } from "./themeUtils.js";
 export const DIALOG_TYPE = {
     STANDARD: "standard",
     FORM: "form",
@@ -7,20 +6,8 @@ export const DIALOG_TYPE = {
     CONFIRM: "confirm",
     CUSTOM: "custom",
 };
-function cleanupThemeWatchers(root) {
-    const walk = (element) => {
-        ;
-        element.__a1rStopThemeWatch?.();
-        Array.from(element.children).forEach((child) => {
-            if (child instanceof HTMLElement) {
-                walk(child);
-            }
-        });
-    };
-    walk(root);
-}
 export class DialogBuilder {
-    constructor(type = DIALOG_TYPE.STANDARD, theme = {}) {
+    constructor(type = DIALOG_TYPE.STANDARD) {
         this.title = "";
         this.content = null;
         this.buttons = [];
@@ -43,7 +30,6 @@ export class DialogBuilder {
         this.buttonBarEl = null;
         this.keydownHandler = null;
         this.type = type;
-        this.theme = theme;
     }
     setTitle(title) {
         this.title = title;
@@ -51,7 +37,7 @@ export class DialogBuilder {
     }
     setContent(content) {
         if (typeof content === "string") {
-            const wrapper = createContainer(this.theme, {
+            const wrapper = createContainer({
                 display: "block",
                 minHeight: "unset",
             });
@@ -121,7 +107,6 @@ export class DialogBuilder {
             window.removeEventListener("keydown", this.keydownHandler);
             this.keydownHandler = null;
         }
-        cleanupThemeWatchers(this.overlayEl);
         this.overlayEl.remove();
         this.overlayEl = null;
         this.dialogEl = null;
@@ -132,8 +117,8 @@ export class DialogBuilder {
         this.resolveOpen = null;
     }
     build() {
-        const overlay = createOverlay(this.theme);
-        const theme = resolveThemeToken(this.theme);
+        const overlay = document.createElement('div');
+        overlay.className = 'a1r-overlay';
         let minHeight = "320px";
         if (this.dialogMinHeight !== null) {
             minHeight = this.dialogMinHeight;
@@ -141,44 +126,23 @@ export class DialogBuilder {
         else if (this.type === DIALOG_TYPE.CONFIRM || this.type === DIALOG_TYPE.CUSTOM) {
             minHeight = "unset";
         }
-        const dialog = createDialog(this.theme, {
-            width: this.dialogWidth,
-            maxWidth: this.dialogMaxWidth,
-            maxHeight: this.dialogMaxHeight,
-            minHeight: minHeight,
-            display: "flex",
-            flexDirection: "column",
-            overflow: "hidden",
-            padding: "0",
-        });
-        const titleBar = createContainer(this.theme, {
-            flexShrink: "0",
-            minHeight: "42px",
-            justifyContent: "space-between",
-            gap: "8px",
-            borderBottom: "1px solid rgba(128,128,128,0.2)",
-            padding: "0 12px",
-            background: "transparent",
-        });
-        const titleLabel = createLabel(this.title || "Dialog", this.theme, {
-            minWidth: "unset",
-            flexShrink: "1",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-            fontWeight: "bold",
-            color: theme.color.title,
-        });
-        const titleActions = createContainer(this.theme, {
-            minHeight: "unset",
-            width: "auto",
-            justifyContent: "flex-end",
-            gap: "6px",
-            padding: "0",
-            background: "transparent",
-        });
+        const dialog = document.createElement('div');
+        dialog.className = 'a1r-dialog';
+        dialog.style.width = this.dialogWidth;
+        dialog.style.maxWidth = this.dialogMaxWidth;
+        dialog.style.maxHeight = this.dialogMaxHeight;
+        dialog.style.minHeight = minHeight;
+        dialog.style.overflow = "hidden";
+        dialog.style.padding = "0";
+        const titleBar = document.createElement('div');
+        titleBar.className = 'a1r-dialog-titlebar';
+        const titleLabel = document.createElement('span');
+        titleLabel.className = 'a1r-dialog-title';
+        titleLabel.textContent = this.title || "Dialog";
+        const titleActions = document.createElement('div');
+        titleActions.className = 'a1r-dialog-header-actions';
         this.headerButtons.forEach((button) => {
-            const buttonEl = createButton(button.label, this.theme, {
+            const buttonEl = createButton(button.label, {
                 minHeight: "26px",
                 padding: "2px 10px",
                 flex: "0",
@@ -191,7 +155,7 @@ export class DialogBuilder {
             titleActions.appendChild(buttonEl);
         });
         if (this.showCloseButton) {
-            const closeButton = createButton("×", this.theme, {
+            const closeButton = createButton("×", {
                 minHeight: "26px",
                 minWidth: "28px",
                 maxWidth: "28px",
@@ -204,33 +168,18 @@ export class DialogBuilder {
         }
         titleBar.appendChild(titleLabel);
         titleBar.appendChild(titleActions);
-        const content = createContainer(this.theme, {
-            display: "flex",
-            flex: "1",
-            flexDirection: "column",
-            alignItems: "stretch",
-            overflowY: "auto",
-            width: "100%",
-            minHeight: "unset",
-            gap: "16px",
-            padding: "12px",
-            background: "transparent",
-        });
+        const content = document.createElement('div');
+        content.className = 'a1r-dialog-content';
         if (this.content) {
             content.appendChild(this.content);
         }
-        const buttonBar = createContainer(this.theme, {
-            flexShrink: "0",
-            minHeight: "44px",
-            display: this.buttons.length > 0 ? "flex" : "none",
-            justifyContent: "flex-end",
-            gap: "8px",
-            borderTop: "1px solid rgba(128,128,128,0.2)",
-            padding: "0 12px",
-            background: "transparent",
-        });
+        const buttonBar = document.createElement('div');
+        buttonBar.className = 'a1r-dialog-buttonbar';
+        if (this.buttons.length === 0) {
+            buttonBar.style.display = "none";
+        }
         this.buttons.forEach((button) => {
-            const buttonEl = createButton(button.label, this.theme, {
+            const buttonEl = createButton(button.label, {
                 minHeight: "30px",
                 padding: "4px 12px",
                 flex: "0",
@@ -238,8 +187,6 @@ export class DialogBuilder {
             });
             if (button.options?.disabled) {
                 buttonEl.disabled = true;
-                buttonEl.style.opacity = "0.6";
-                buttonEl.style.cursor = "not-allowed";
             }
             buttonEl.addEventListener("click", (event) => {
                 const result = button.onClick?.(event, this);

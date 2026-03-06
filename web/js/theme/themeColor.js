@@ -1,4 +1,3 @@
-// Theme color registry and theme-name helpers.
 export const THEME_COLORS = {
     dark: {
         name: "Dark",

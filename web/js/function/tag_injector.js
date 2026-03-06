@@ -1,4 +1,4 @@
-// @ts-expect-error ComfyUI runtime-provided module
+// @ts-expect-error ComfyUI 运行时注入模块
 import { app } from "/scripts/app.js";
 import { ModelMetadata, getModelFromNode, getTagsDB, isModelLoaderNode } from "./config_model.js";
 // 常量
