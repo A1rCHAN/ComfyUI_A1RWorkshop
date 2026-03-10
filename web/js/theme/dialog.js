@@ -50,7 +50,8 @@ export class DialogBuilder {
         return this;
     }
     addButton(label, type = "default", onClick = null, options = {}) {
-        this.buttons.push({ label, type, onClick, options });
+        const { closeAfterClick = true, ...rest } = options;
+        this.buttons.push({ label, type, onClick, closeAfterClick, options: rest });
         return this;
     }
     addCustomHeaderButton(label, type, onClick, options = {}) {
@@ -190,8 +191,8 @@ export class DialogBuilder {
             }
             buttonEl.addEventListener("click", (event) => {
                 const result = button.onClick?.(event, this);
-                if (result !== false) {
-                    this.close(result);
+                if (button.closeAfterClick && result !== false) {
+                    this.close(result ?? null);
                 }
             });
             buttonBar.appendChild(buttonEl);

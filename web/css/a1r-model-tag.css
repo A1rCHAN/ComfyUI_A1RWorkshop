@@ -1,9 +1,6 @@
 /* A1R Model Tag - 编辑器与管理器窗口组件样式 */
-/* 使用 :root 上的 CSS 变量（由 a1r-theme.css + themeWatcher 注入） */
 
-/* ========================================= */
-/* === 编辑器窗口                        === */
-/* ========================================= */
+/* === 编辑器窗口 === */
 
 /* 编辑器主内容区 */
 .a1r-editor-content {
@@ -109,9 +106,7 @@
   resize: vertical;
 }
 
-/* ========================================= */
-/* === 管理器窗口                        === */
-/* ========================================= */
+/* === 管理器窗口 === */
 
 /* 可滚动内容区 */
 .a1r-manager-content {
@@ -187,7 +182,7 @@
   border-radius: 0;
 }
 .a1r-manager-category-header:hover {
-  background-color: color-mix(in srgb, var(--a1r-color-menu) 80%, transparent);
+  background-color: var(--a1r-color-menu);
 }
 
 /* 标题栏左侧区域 */
@@ -260,10 +255,10 @@
   gap: 10px;
   min-height: unset;
   box-sizing: border-box;
-  background: var(--a1r-color-background);
+  background: var(--a1r-color-border);
 }
 .a1r-manager-list-item:hover:not(.a1r-manager-list-item--selected) {
-  background: var(--a1r-color-border);
+  background: var(--a1r-color-widget);
 }
 [data-a1r-mode="classic"] .a1r-manager-list-item:hover:not(.a1r-manager-list-item--selected) {
   background: color-mix(in srgb, var(--a1r-color-border) 85%, transparent);

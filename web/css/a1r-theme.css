@@ -21,9 +21,9 @@
   border: var(--a1r-border-width) solid var(--a1r-color-border);
   box-shadow: 0 8px 24px var(--a1r-color-shadow-alpha);
 }
-.a1r-toast--success { background: var(--a1r-color-background); }
+.a1r-toast--success { background: var(--a1r-color-prompt); }
 .a1r-toast--error   { background: var(--a1r-color-warning); }
-.a1r-toast--info    { background: var(--a1r-color-prompt); }
+.a1r-toast--info    { background: var(--a1r-color-background); }
 
 /* === Overlay === */
 .a1r-overlay {
@@ -160,7 +160,7 @@
   border: none;
 }
 .a1r-combo:hover {
-  filter: brightness(2);
+  background: var(--a1r-color-widget);
 }
 
 /* === Textarea === */
@@ -203,12 +203,12 @@
   border: none;
 }
 .a1r-button:hover {
-  filter: brightness(1.2);
+  background: var(--a1r-color-widget);
 }
 .a1r-button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-  filter: none;
+  background: var(--a1r-color-border);
 }
 
 /* === Label === */

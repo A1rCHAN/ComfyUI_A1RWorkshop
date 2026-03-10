@@ -1,6 +1,6 @@
 // @ts-expect-error ComfyUI 运行时注入模块
 import { app } from "/scripts/app.js";
-import { ModelMetadata, getModelFromNode, getTagsDB, isModelLoaderNode } from "./config_model.js";
+import { ModelMetadata, getModelFromNode, getTagsDB, isModelLoaderNode } from "../data/config_model.js";
 // 常量
 const TAG_SEPARATOR = ", ";
 const PENDING_TAGS_KEY = "_pendingEmbeddingTags";

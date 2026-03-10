@@ -1,4 +1,4 @@
-import { getTagsDB, saveFilteredConfig } from "./config_model.js";
+import { getTagsDB, saveFilteredConfig } from "../data/config_model.js";
 import { createTagsEditor, EDITOR_MODE } from "./editor_window.js";
 import { createButton, createLabel, showToast, } from "../theme/themeUtils.js";
 import { DialogBuilder, DIALOG_TYPE } from "../theme/dialog.js";
@@ -193,9 +193,14 @@ export function createTagsManager(options = {}) {
         updateRemoveButtonVisibility();
     });
     builder
-        .addButton("Cancel", "secondary", () => {
+        .addButton("Cancel", "secondary", () => null)
+        .addButton("Save", "secondary", async () => {
         exitSelectMode();
-        return null;
+        const result = await saveFilteredConfig(db);
+        if (result === "unchanged") {
+            showToast("Nothing has changed", "info");
+        }
+        return true;
     })
         .addButton("Apply", "secondary", async () => {
         exitSelectMode();
@@ -203,17 +208,7 @@ export function createTagsManager(options = {}) {
         if (result === "unchanged") {
             showToast("Nothing has changed", "info");
         }
-        return false;
-    })
-        .addButton("Save", "secondary", async (_event, dialog) => {
-        exitSelectMode();
-        const result = await saveFilteredConfig(db);
-        if (result === "unchanged") {
-            showToast("Nothing has changed", "info");
-        }
-        dialog.close(true);
-        return false;
-    });
+    }, { closeAfterClick: false });
     builder.onClose(() => {
         onClose?.();
         exitSelectMode();

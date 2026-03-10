@@ -1,3 +1,5 @@
+import { getCanvasSettingState } from "../data/state.js";
+// === 工具 ===
 export function hexToRGBA(hex, alpha = 1) {
     if (!hex)
         return `rgba(0, 0, 0, ${alpha})`;
@@ -41,6 +43,7 @@ export function showToast(message, type = "success", duration = 2500, customStyl
     }
     return el;
 }
+// === 组件 ===
 export function createOverlay(customStyle = {}) {
     const el = document.createElement('div');
     el.className = 'a1r-overlay';
@@ -84,4 +87,69 @@ export function createTextarea(customStyle = {}) {
     el.className = 'a1r-textarea';
     Object.assign(el.style, customStyle);
     return el;
+}
+// === 复合组件 ===
+export function rangeSlider(customStyle = {}) {
+    return createRangeSlider(customStyle);
+}
+export function stepSlider(customStyle = {}) {
+    return createStepSlider(customStyle);
+}
+// --- 辅助函数 ---
+function hiddenSlider(config = {}, customStyle = {}) {
+    const hiddenSlider = document.createElement("input");
+    hiddenSlider.className = 'a1r-slider-hidden';
+    hiddenSlider.type = "range";
+    if (config.min !== undefined)
+        hiddenSlider.min = config.min;
+    if (config.max !== undefined)
+        hiddenSlider.max = config.max;
+    if (config.step !== undefined)
+        hiddenSlider.step = config.step;
+    if (config.value !== undefined)
+        hiddenSlider.value = config.value;
+    Object.assign(hiddenSlider.style, customStyle);
+    return hiddenSlider;
+}
+function createRangeSlider(customStyle = {}) {
+    const state = getCanvasSettingState();
+    // 整体（容器）
+    const main = createContainer(customStyle);
+    const track = document.createElement("div");
+    track.className = 'a1r-slider-track';
+    Object.assign(track.style, customStyle);
+    const activeTrack = document.createElement("div");
+    activeTrack.className = 'a1r-slider-track-active';
+    Object.assign(activeTrack.style, customStyle);
+    const minSlider = hiddenSlider({
+        min: state.rangeStepValue,
+        max: state.MAX_RANGE,
+        step: state.rangeStepValue,
+        value: state.rangeMinValue,
+    }, { zIndex: "4" });
+    const maxSlider = hiddenSlider({
+        min: state.rangeStepValue,
+        max: state.MAX_RANGE,
+        step: state.rangeStepValue,
+        value: state.rangeMaxValue,
+    }, { zIndex: "5" });
+    const minThumb = document.createElement("div");
+    minThumb.className = 'a1r-slider-thumb';
+    Object.assign(minThumb.style, customStyle);
+    const maxThumb = document.createElement("div");
+    maxThumb.className = 'a1r-slider-thumb';
+    Object.assign(maxThumb.style, customStyle);
+    const updateVisual = () => {
+        minSlider.value = state.rangeMinValue;
+        maxSlider.value = state.rangeMaxValue;
+    };
+    main.appendChild(track);
+    main.appendChild(activeTrack);
+    main.appendChild(minThumb);
+    main.appendChild(maxThumb);
+    main.appendChild(minSlider);
+    main.appendChild(maxSlider);
+    return main;
+}
+function createStepSlider(customStyle = {}) {
 }

@@ -1,0 +1,190 @@
+/* A1R Workshop Theme - Canvas 2D Slider Widget */
+
+/* 外层容器 */
+.a1r-canvas-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 10px;
+  box-sizing: border-box;
+}
+[data-a1r-mode="classic"] .a1r-canvas-container {
+  padding: 6px;
+}
+
+/* 画布主体 */
+.a1r-canvas-slider-box {
+  position: relative;
+  border: none;
+  border-radius: var(--a1r-radius-md);
+  overflow: hidden;
+  cursor: crosshair;
+  box-shadow: none;
+  user-select: none;
+  touch-action: none;
+  background: var(--a1r-color-border);
+  border-color: var(--a1r-color-border);
+  box-shadow: none;
+}
+[data-a1r-mode="classic"] .a1r-canvas-slider-box {
+  border: 1px solid var(--a1r-color-secondary);
+  border-radius: 0;
+  box-shadow: inset 0 0 4px rgba(0, 0, 0, 0.5);
+}
+
+/* 网格 */
+.a1r-canvas-grid {
+  position: absolute;
+  inset: 0;
+  /* border-radius: var(--a1r-radius-md);
+  outline: none; */
+  pointer-events: none;
+  background:
+    linear-gradient(to right, var(--a1r-color-bottom) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--a1r-color-bottom) 1px, transparent 1px);
+  /* border: 1px solid var(--a1r-color-border); */
+  box-shadow: inset 0 0 0 1px var(--a1r-color-border);
+}
+
+/* 最小值区域 */
+.a1r-canvas-zone {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  border: none;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--a1r-color-background) 60%, transparent);
+}
+[data-a1r-mode="classic"] .a1r-canvas-zone {
+  border: 1px solid color-mix(in srgb, var(--a1r-color-secondary) 30%, transparent);
+}
+
+/* 选中区域 */
+.a1r-canvas-selected-area {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  border: none;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--a1r-color-widget) 50%, transparent);
+}
+[data-a1r-mode="classic"] .a1r-canvas-selected-area {
+  border: 1px solid var(--a1r-color-secondary);
+}
+
+/* 水平引导线（交互层） */
+.a1r-canvas-guide-line-h {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 6px;
+  z-index: 5;
+  background: transparent;
+  cursor: ns-resize;
+  pointer-events: auto;
+  transform: translateY(50%);
+}
+[data-a1r-mode="classic"] .a1r-canvas-guide-line-h {
+  height: 4px;
+}
+
+/* 垂直引导线（交互层） */
+.a1r-canvas-guide-line-v {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  z-index: 5;
+  background: transparent;
+  cursor: ew-resize;
+  pointer-events: auto;
+  transform: translateX(-50%);
+}
+[data-a1r-mode="classic"] .a1r-canvas-guide-line-v {
+  width: 4px;
+}
+
+/* 引导线视觉层（通用基础） */
+.a1r-canvas-guide-line-visual {
+  position: absolute;
+  pointer-events: none;
+  outline: none;
+  transition: outline 0.15s ease;
+  background: var(--a1r-color-widget)
+}
+[data-a1r-mode="classic"] .a1r-canvas-guide-line-visual {
+  transition: none;
+}
+
+/* 水平引导线视觉 */
+.a1r-canvas-guide-line-h-visual {
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+}
+
+/* 垂直引导线视觉 */
+.a1r-canvas-guide-line-v-visual {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+}
+
+/* 交叉点 */
+.a1r-canvas-guide-point {
+  position: absolute;
+  z-index: 10;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  outline: none;
+  transform: translate(-50%, 50%);
+  cursor: grab;
+  pointer-events: auto;
+  transition: outline 0.15s ease;
+  background: var(--a1r-color-widget);
+  border-color: var(--a1r-color-text);
+  box-shadow: 0 2px 8px var(--a1r-color-shadow-alpha);
+}
+[data-a1r-mode="classic"] .a1r-canvas-guide-point {
+  width: 14px;
+  height: 14px;
+  border-radius: 0;
+  border: 1px solid var(--a1r-color-text);
+  box-shadow: none;
+  transition: none;
+}
+
+/* 坐标提示 */
+.a1r-canvas-coord-tooltip {
+  position: fixed;
+  z-index: 10000;
+  padding: 6px 12px;
+  border-radius: var(--a1r-radius-sm);
+  font-family: monospace;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  display: none;
+  background: var(--a1r-color-background);
+  color: var(--a1r-color-text);
+  box-shadow: 0 2px 8px var(--a1r-color-shadow-alpha);
+}
+[data-a1r-mode="classic"] .a1r-canvas-coord-tooltip {
+  padding: 4px 8px;
+  border-radius: 0;
+  font-family: "Courier New", monospace;
+  font-size: 11px;
+  font-weight: 400;
+  border: 1px solid var(--a1r-color-secondary);
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.3);
+}

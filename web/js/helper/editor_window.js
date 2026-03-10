@@ -1,4 +1,4 @@
-import { ModelMetadata, fetchAllModelsFromAPI, getModelFromNode, getModelListFromNode, getModelWidgetName, getTagsDB, saveConfig, } from "./config_model.js";
+import { ModelMetadata, fetchAllModelsFromAPI, getModelFromNode, getModelListFromNode, getModelWidgetName, getTagsDB, saveConfig, } from "../data/config_model.js";
 import { createCombo, createContainer, createLabel, createTextarea, showToast, } from "../theme/themeUtils.js";
 import { DialogBuilder, DIALOG_TYPE } from "../theme/dialog.js";
 export const EDITOR_MODE = {
@@ -115,7 +115,7 @@ export async function createTagsEditor(options = {}) {
         .setContent(content)
         .setCloseOnOverlayClick(true)
         .setCloseOnEsc(true)
-        .setCloseButton(true)
+        .setCloseButton(false)
         .setAutoFocus(false);
     if (config.showManagerButton) {
         builder.addCustomHeaderButton("Open Manager", "secondary", () => {
@@ -123,10 +123,7 @@ export async function createTagsEditor(options = {}) {
         });
     }
     builder
-        .addButton("Cancel", "secondary", () => {
-        onClose?.();
-        return null;
-    })
+        .addButton("Cancel", "secondary", () => null)
         .addButton(mode === EDITOR_MODE.MANAGER_ADD ? "Add" : "Save", "secondary", async () => {
         const positive = content.querySelector("[data-role='tags-positive']")?.value || "";
         const negative = content.querySelector("[data-role='tags-negative']")?.value || "";
@@ -145,12 +142,12 @@ export async function createTagsEditor(options = {}) {
             const storagePath = metadata.getStoragePath();
             if (mode === EDITOR_MODE.MANAGER_ADD) {
                 db.add(metadata, tags);
-                showToast(`Added: ${metadata.getDisplayName()}`, "success");
+                showToast(`Added: ${metadata.getDisplayName()}`, "info");
                 onSave?.({ model: storagePath, tags, category: finalCategory });
                 return true;
             }
             if (!tags.positive && !tags.negative) {
-                showToast("Tags are empty, entry not saved", "info");
+                showToast("Tags are empty, entry not saved", "error");
                 return true;
             }
             const existing = db.findByModelName(selectedModel);
@@ -169,7 +166,7 @@ export async function createTagsEditor(options = {}) {
         const finalCategory = category || metadata.getCategory();
         const storagePath = metadata.getStoragePath();
         if (!tags.positive && !tags.negative) {
-            showToast("Tags are empty, entry not saved", "info");
+            showToast("Tags are empty, entry not saved", "error");
             return true;
         }
         const existing = db.findByModelName(config.currentModel);
