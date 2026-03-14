@@ -1,0 +1,267 @@
+/* A1R Workshop — Seed Control */
+
+/* === Button Bar === */
+.a1r-seed-container {
+  flex-direction: row;
+  align-items: flex-start;
+  height: auto;
+  gap: 6px;
+  background: transparent;
+}
+
+.a1r-seed-button {
+  flex: 1 1 0;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* === History Active State === */
+.a1r-seed-history--active {
+  outline: 1px solid var(--a1r-color-text);
+  outline-offset: -1px;
+}
+
+/* === Popover === */
+.a1r-seed-popover {
+  position: fixed;
+  z-index: 10000;
+  min-width: 220px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: var(--a1r-radius-lg);
+  font-family: var(--a1r-font);
+  background: var(--a1r-color-background);
+  border: var(--a1r-border-width) solid var(--a1r-color-border);
+}
+
+.a1r-seed-popover-title {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px 6px;
+  margin-bottom: 4px;
+  color: var(--a1r-color-label);
+}
+
+.a1r-seed-popover-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--a1r-radius-md);
+  font-size: 13px;
+  cursor: pointer;
+  transition: var(--a1r-transition);
+  color: var(--a1r-color-text);
+}
+
+.a1r-seed-popover-item:not(.a1r-seed-popover-item--current):hover {
+  background: var(--a1r-color-border);
+}
+
+.a1r-seed-popover-item--current {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.a1r-seed-popover-seed {
+  font-family: 'SF Mono', 'Cascadia Code', 'Consolas', monospace;
+  font-size: 12px;
+}
+
+.a1r-seed-popover-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: var(--a1r-radius-sm);
+  flex-shrink: 0;
+  background: var(--a1r-color-border);
+  color: var(--a1r-color-label);
+}
+
+/* === Queue / Progress === */
+.a1r-seed-popover-item--queue {
+  position: relative;
+  overflow: hidden;
+  cursor: default;
+}
+
+.a1r-seed-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0%;
+  background: var(--a1r-color-prompt);
+  opacity: 0.15;
+  border-radius: inherit;
+  transition: width 0.2s ease;
+  pointer-events: none;
+}
+
+/* === Classic mode overrides === */
+
+/* --- Preview Tooltip --- */
+.a1r-seed-preview {
+  position: fixed;
+  z-index: 10001;
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  padding: 6px;
+  border-radius: var(--a1r-radius-lg);
+  background: var(--a1r-color-background);
+  border: var(--a1r-border-width) solid var(--a1r-color-border);
+  max-width: 640px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.a1r-seed-preview-img {
+  height: 200px;
+  width: auto;
+  object-fit: contain;
+  border-radius: var(--a1r-radius-md);
+  flex-shrink: 0;
+}
+
+/* --- Classic mode --- */
+[data-a1r-mode="classic"] .a1r-seed-preview {
+  border-radius: 0;
+  padding: 4px;
+  gap: 4px;
+  border: 1px solid var(--a1r-color-border);
+}
+
+[data-a1r-mode="classic"] .a1r-seed-preview-img {
+  height: 160px;
+  border-radius: 0;
+}
+
+/* === Classic mode overrides (Popover) === */
+[data-a1r-mode="classic"] .a1r-seed-popover {
+  min-width: 200px;
+  max-height: 300px;
+  border-radius: 0;
+  padding: 4px;
+  font-family: Courier New, monospace;
+  border: 1px solid var(--a1r-color-border);
+}
+
+[data-a1r-mode="classic"] .a1r-seed-popover-title {
+  font-size: 11px;
+  font-weight: 400;
+  padding: 4px 6px;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--a1r-color-border);
+}
+
+[data-a1r-mode="classic"] .a1r-seed-popover-item {
+  padding: 4px 8px;
+  border-radius: 0;
+  font-size: 12px;
+  gap: 6px;
+  transition: none;
+}
+
+[data-a1r-mode="classic"] .a1r-seed-popover-badge {
+  font-size: 9px;
+  font-weight: 400;
+  padding: 1px 4px;
+  border-radius: 0;
+  border: 1px solid var(--a1r-color-border);
+}
+
+[data-a1r-mode="classic"] .a1r-seed-progress {
+  border-radius: 0;
+}
+
+/* === Lightbox === */
+.a1r-lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+}
+
+.a1r-lightbox-img {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: var(--a1r-radius-lg);
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.a1r-lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  font-size: 22px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--a1r-radius-sm);
+  transition: color 0.15s, background 0.15s;
+  line-height: 1;
+}
+.a1r-lightbox-close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.a1r-lightbox-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 28px;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: var(--a1r-radius-md);
+  transition: color 0.15s, background 0.15s;
+  user-select: none;
+  line-height: 1;
+}
+.a1r-lightbox-arrow:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+.a1r-lightbox-arrow--left { left: 16px; }
+.a1r-lightbox-arrow--right { right: 16px; }
+
+.a1r-lightbox-counter {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: var(--a1r-font);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* --- Classic mode lightbox --- */
+[data-a1r-mode="classic"] .a1r-lightbox-img {
+  border-radius: 0;
+}
+[data-a1r-mode="classic"] .a1r-lightbox-overlay {
+  backdrop-filter: none;
+}
+[data-a1r-mode="classic"] .a1r-lightbox-close,
+[data-a1r-mode="classic"] .a1r-lightbox-arrow {
+  border-radius: 0;
+}
+
+/* === Preview image hover hint === */
+.a1r-seed-preview-img:hover {
+  opacity: 0.85;
+  outline: 2px solid var(--a1r-color-prompt);
+  outline-offset: -2px;
+}

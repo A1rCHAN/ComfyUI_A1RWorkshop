@@ -62,11 +62,25 @@ export function createContainer(customStyle = {}) {
     Object.assign(el.style, customStyle);
     return el;
 }
-export function createButton(label, customStyle = {}) {
+export function createButton(label, customStyleOrOptions = {}) {
+    // 兼容旧调用方式（第二参数直接传 style 对象）
+    const isOptions = 'customStyle' in customStyleOrOptions || 'ellipsis' in customStyleOrOptions;
+    const options = isOptions
+        ? customStyleOrOptions
+        : { customStyle: customStyleOrOptions };
     const el = document.createElement('button');
-    el.textContent = label;
     el.className = 'a1r-button';
-    Object.assign(el.style, customStyle);
+    if (options.ellipsis) {
+        const span = document.createElement('span');
+        span.textContent = label;
+        span.className = 'a1r-button-text';
+        el.appendChild(span);
+    }
+    else {
+        el.textContent = label;
+    }
+    if (options.customStyle)
+        Object.assign(el.style, options.customStyle);
     return el;
 }
 export function createLabel(text, customStyle = {}) {
@@ -139,10 +153,10 @@ function createRangeSlider(customStyle = {}) {
     const maxThumb = document.createElement("div");
     maxThumb.className = 'a1r-slider-thumb';
     Object.assign(maxThumb.style, customStyle);
-    const updateVisual = () => {
-        minSlider.value = state.rangeMinValue;
-        maxSlider.value = state.rangeMaxValue;
-    };
+    // const updateVisual = () => {
+    //   minSlider.value = state.rangeMinValue
+    //   maxSlider.value = state.rangeMaxValue
+    // }
     main.appendChild(track);
     main.appendChild(activeTrack);
     main.appendChild(minThumb);

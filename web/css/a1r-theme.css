@@ -211,6 +211,15 @@
   background: var(--a1r-color-border);
 }
 
+/* Button text overflow - right ellipsis */
+.a1r-button-text {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
 /* === Label === */
 .a1r-label {
   flex-shrink: 0;
