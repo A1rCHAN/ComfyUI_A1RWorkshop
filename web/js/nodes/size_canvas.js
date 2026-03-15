@@ -11,7 +11,9 @@ const openCanvasSetting = async (node) => {
         return;
     const currentMin = widgetWidth.options.min ?? 128;
     const currentMax = widgetWidth.options.max ?? 4096;
-    const currentStep = widgetWidth.options.step2 ?? widgetWidth.options.step ?? 128;
+    const slider2DWidget = node.widgets.find((w) => w.name === "canvas_2d_slider");
+    const realStep = slider2DWidget?.getUserStep?.()?.stepW;
+    const currentStep = realStep ?? widgetWidth.options.step2 ?? widgetWidth.options.step ?? 128;
     const result = await showCanvasSettingDialog({ currentMin, currentMax, currentStep });
     if (result === null)
         return;

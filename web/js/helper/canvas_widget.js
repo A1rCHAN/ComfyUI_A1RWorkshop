@@ -471,6 +471,9 @@ export function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeig
         userStepW = stepW;
         userStepH = stepH;
     };
+    widget.getUserStep = function () {
+        return { stepW: userStepW, stepH: userStepH };
+    };
     widget.onRemove = function () {
         if (isDragging && currentSliderBox === sliderBox) {
             isDragging = false;
