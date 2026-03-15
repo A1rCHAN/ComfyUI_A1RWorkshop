@@ -1,0 +1,301 @@
+/* A1R Workshop — Model Preview Manager */
+
+/* === 管理窗口主内容区 === */
+
+.a1r-pm-content {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: 0;
+  max-height: 80vh;
+  overflow-y: auto;
+  gap: 12px;
+  flex: 1;
+  padding: 2px 3px;
+  box-sizing: border-box;
+  background: transparent;
+}
+
+/* === 图标网格 === */
+
+.a1r-pm-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 4px;
+  justify-content: flex-start;
+  align-content: flex-start;
+  min-height: 120px;
+}
+
+.a1r-pm-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 120px;
+  opacity: 0.6;
+  font-size: 13px;
+  font-family: var(--a1r-font);
+  color: var(--a1r-color-text);
+}
+
+/* === 模型卡片（正方形图标） === */
+
+.a1r-pm-card {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border-radius: var(--a1r-radius-lg);
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--a1r-color-border);
+  transition: box-shadow 0.2s, transform 0.15s;
+  flex-shrink: 0;
+}
+.a1r-pm-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  transform: scale(1.03);
+}
+[data-a1r-mode="classic"] .a1r-pm-card {
+  border-radius: 0;
+  width: 100px;
+  height: 100px;
+}
+
+.a1r-pm-card-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* 底部渐变遮罩 + 标签 */
+.a1r-pm-card-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 20px 6px 6px;
+  background: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 0.75) 100%);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.a1r-pm-card-label {
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--a1r-font);
+  text-align: center;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+}
+
+/* 添加按钮卡片 */
+.a1r-pm-card--add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--a1r-color-text);
+  opacity: 0.4;
+  background: transparent;
+}
+.a1r-pm-card--add:hover {
+  opacity: 0.7;
+  box-shadow: none;
+  transform: none;
+}
+
+.a1r-pm-add-icon {
+  font-size: 36px;
+  font-weight: 300;
+  color: var(--a1r-color-text);
+  line-height: 1;
+  user-select: none;
+}
+
+/* === 编辑窗口 === */
+
+.a1r-pm-editor-content {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-height: unset;
+  gap: 12px;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+}
+
+/* 模型选择下的预览小图 */
+.a1r-pm-model-preview-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 0;
+  min-height: 0;
+}
+.a1r-pm-model-preview-row:empty {
+  display: none;
+}
+
+.a1r-pm-model-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--a1r-radius-sm);
+  object-fit: cover;
+  cursor: pointer;
+  transition: box-shadow 0.15s;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.a1r-pm-model-thumb:hover {
+  box-shadow: 0 0 0 2px var(--a1r-color-text);
+}
+
+/* === 上传区域 === */
+
+.a1r-pm-upload-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: unset;
+  padding: 0;
+  background: transparent;
+}
+
+.a1r-pm-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100px;
+  padding: 20px;
+  border: 2px dashed var(--a1r-color-border);
+  border-radius: var(--a1r-radius-lg);
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  background: transparent;
+  user-select: none;
+}
+.a1r-pm-dropzone:hover,
+.a1r-pm-dropzone--hover {
+  border-color: var(--a1r-color-text);
+  background: color-mix(in srgb, var(--a1r-color-text) 5%, transparent);
+}
+.a1r-pm-dropzone--uploading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+[data-a1r-mode="classic"] .a1r-pm-dropzone {
+  border-radius: 0;
+}
+
+.a1r-pm-dropzone-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--a1r-color-text);
+  font-family: var(--a1r-font);
+}
+
+.a1r-pm-dropzone-sub {
+  font-size: 11px;
+  color: var(--a1r-color-text);
+  opacity: 0.5;
+  margin-top: 4px;
+  font-family: var(--a1r-font);
+}
+
+/* === 已上传缩略图区域 === */
+
+.a1r-pm-thumb-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.a1r-pm-thumb-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 4px;
+  align-content: flex-start;
+}
+
+.a1r-pm-thumb-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 60px;
+  opacity: 0.5;
+  font-size: 12px;
+  font-style: italic;
+  font-family: var(--a1r-font);
+  color: var(--a1r-color-text);
+}
+
+.a1r-pm-thumb {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--a1r-radius-md);
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow 0.15s, outline 0.15s;
+  flex-shrink: 0;
+  background: var(--a1r-color-border);
+}
+.a1r-pm-thumb:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+[data-a1r-mode="classic"] .a1r-pm-thumb {
+  border-radius: 0;
+  width: 60px;
+  height: 60px;
+}
+
+.a1r-pm-thumb-img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.a1r-pm-thumb-badge {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  padding: 1px 5px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--a1r-font);
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+}
+
+/* 选中态 */
+.a1r-pm-thumb--selected {
+  outline: 3px solid var(--a1r-color-prompt);
+  /* outline-offset: -3px; */
+}

@@ -1,8 +1,6 @@
 // @ts-expect-error ComfyUI 运行时注入模块
 import { app } from "/scripts/app.js";
 import { getModelFromNode, getTagsDB, initConfig, isModelLoaderNode } from "../data/config_model.js";
-import { showEditor } from "../helper/editor_window.js";
-import { showManager } from "../helper/manager_window.js";
 import { setupTagInjector } from "./tag_injector.js";
 import { initGlobalThemeCSSVar, injectCSS } from "../theme/themeWatcher.js";
 let initialized = false;
@@ -19,25 +17,6 @@ app.registerExtension({
         injectCSS("../../css/a1r-model-tag.css", import.meta.url);
         await ensureInit();
         setupTagInjector();
-    },
-    getNodeMenuItems(node) {
-        if (!isModelLoaderNode(node))
-            return [];
-        return [{
-                content: "Open Tag Editor",
-                callback: () => { ensureInit().then(() => { showEditor(node); }); }
-            }];
-    },
-    getCanvasMenuItems() {
-        return [
-            null,
-            {
-                content: "Open Tags Manager",
-                callback: () => {
-                    ensureInit().then(() => showManager());
-                },
-            },
-        ];
     },
     async nodeCreated(node) {
         if (!isModelLoaderNode(node))

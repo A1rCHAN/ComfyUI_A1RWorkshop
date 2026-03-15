@@ -193,6 +193,26 @@ export function openLightbox(urls, startIndex = 0, onClose) {
     };
     document.addEventListener("keydown", onKey);
 }
+// ========== 通用定位 ==========
+/** 将 tooltip 定位到 referenceEl 右侧、anchorEl 垂直位置（向上偏移 25%） */
+function positionTooltip(el, anchorEl, referenceEl) {
+    const refRect = referenceEl.getBoundingClientRect();
+    const tipRect = el.getBoundingClientRect();
+    let left = refRect.right + 6;
+    if (left + tipRect.width > window.innerWidth - 8)
+        left = refRect.left - tipRect.width - 6;
+    if (left < 8)
+        left = 8;
+    const itemRect = anchorEl.getBoundingClientRect();
+    let top = itemRect.top - tipRect.height * 0.25;
+    if (top + tipRect.height > window.innerHeight - 8) {
+        top = window.innerHeight - 8 - tipRect.height;
+    }
+    if (top < 8)
+        top = 8;
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+}
 // ========== 预览悬浮提示 ==========
 export function createPreviewTooltip() {
     let tooltip = null;
@@ -250,29 +270,336 @@ export function createPreviewTooltip() {
             tooltip.appendChild(img);
         }
         document.body.appendChild(tooltip);
-        // 定位：popover 右侧
-        const popRect = popoverEl.getBoundingClientRect();
-        const tipRect = tooltip.getBoundingClientRect();
-        let left = popRect.right + 6;
-        if (left + tipRect.width > window.innerWidth - 8)
-            left = popRect.left - tipRect.width - 6;
-        if (left < 8)
-            left = 8;
-        const itemRect = anchorEl.getBoundingClientRect();
-        // 预览图位置向上偏移 25% 高度
-        let top = itemRect.top - tipRect.height * 0.25;
-        if (top + tipRect.height > window.innerHeight - 8) {
-            top = window.innerHeight - 8 - tipRect.height;
-        }
-        if (top < 8)
-            top = 8;
-        tooltip.style.left = `${left}px`;
-        tooltip.style.top = `${top}px`;
+        positionTooltip(tooltip, anchorEl, popoverEl);
     }
     return {
         get element() { return tooltip; },
         show,
         remove,
         scheduleRemove,
+    };
+}
+// ========== 模型预览悬浮（循环播放） ==========
+const MODEL_PREVIEW_API = "/api/a1rworkshop";
+export const MODEL_PREVIEW_UPDATED_EVENT = "a1r:model-preview-updated";
+/** 缓存: folder+filename → url[] (空数组表示已查过无结果) */
+const previewCache = new Map();
+function modelPreviewCacheKey(folder, filename) {
+    return `${folder}::${filename}`;
+}
+export function invalidateModelPreviewCache(folder, filename) {
+    if (!folder) {
+        previewCache.clear();
+        return;
+    }
+    if (filename) {
+        previewCache.delete(modelPreviewCacheKey(folder, filename));
+        return;
+    }
+    const prefix = `${folder}::`;
+    for (const key of Array.from(previewCache.keys())) {
+        if (key.startsWith(prefix)) {
+            previewCache.delete(key);
+        }
+    }
+}
+export function notifyModelPreviewUpdated(folder, filename) {
+    invalidateModelPreviewCache(folder, filename);
+    if (typeof window === "undefined")
+        return;
+    window.dispatchEvent(new CustomEvent(MODEL_PREVIEW_UPDATED_EVENT, {
+        detail: { folder, filename },
+    }));
+}
+async function fetchModelPreviews(folder, filename) {
+    const key = modelPreviewCacheKey(folder, filename);
+    if (previewCache.has(key))
+        return previewCache.get(key);
+    try {
+        const resp = await api.fetchApi(`${MODEL_PREVIEW_API}/model_previews?folder=${encodeURIComponent(folder)}&filename=${encodeURIComponent(filename)}`);
+        if (!resp.ok)
+            return [];
+        const data = await resp.json();
+        const urls = data.images || [];
+        if (urls.length > 0)
+            previewCache.set(key, urls);
+        return urls;
+    }
+    catch {
+        return [];
+    }
+}
+export function createModelPreviewTooltip() {
+    let tooltip = null;
+    let imgA = null;
+    let imgB = null;
+    let cycleTimer = null;
+    let removeTimer = null;
+    let currentIndex = 0;
+    let currentUrls = [];
+    let showingA = true; // imgA 在前台
+    let editing = false; // 编辑中时锁住 tooltip
+    let outsideHandler = null;
+    function stopCycle() {
+        if (cycleTimer !== null) {
+            clearInterval(cycleTimer);
+            cycleTimer = null;
+        }
+    }
+    function cancelRemoveTimer() {
+        if (removeTimer !== null) {
+            clearTimeout(removeTimer);
+            removeTimer = null;
+        }
+    }
+    function removeOutsideClickHandler() {
+        if (outsideHandler) {
+            document.removeEventListener("pointerdown", outsideHandler, true);
+            outsideHandler = null;
+        }
+    }
+    function remove() {
+        if (editing)
+            return;
+        cancelRemoveTimer();
+        stopCycle();
+        if (tooltip) {
+            tooltip.remove();
+            tooltip = null;
+        }
+        imgA = null;
+        imgB = null;
+        currentUrls = [];
+        currentIndex = 0;
+        showingA = true;
+    }
+    function forceRemove() {
+        if (editing)
+            return; // 编辑中不允许外部强制移除
+        teardown();
+    }
+    /** 无条件销毁（show 内部用、outside-click 用） */
+    function teardown() {
+        editing = false;
+        removeOutsideClickHandler();
+        cancelRemoveTimer();
+        stopCycle();
+        if (tooltip) {
+            tooltip.remove();
+            tooltip = null;
+        }
+        imgA = null;
+        imgB = null;
+        currentUrls = [];
+        currentIndex = 0;
+        showingA = true;
+    }
+    function installOutsideClickHandler() {
+        removeOutsideClickHandler();
+        outsideHandler = (ev) => {
+            if (tooltip && !tooltip.contains(ev.target)) {
+                teardown();
+            }
+        };
+        document.addEventListener("pointerdown", outsideHandler, true);
+    }
+    function scheduleRemove() {
+        if (editing)
+            return;
+        cancelRemoveTimer();
+        removeTimer = setTimeout(() => {
+            removeTimer = null;
+            remove();
+        }, 150);
+    }
+    function crossfadeTo(index) {
+        if (!imgA || !imgB || currentUrls.length === 0)
+            return;
+        currentIndex = index % currentUrls.length;
+        const nextUrl = currentUrls[currentIndex];
+        // 后台图加载下一张
+        const backImg = showingA ? imgB : imgA;
+        const frontImg = showingA ? imgA : imgB;
+        backImg.src = nextUrl;
+        backImg.style.opacity = "1";
+        frontImg.style.opacity = "0";
+        showingA = !showingA;
+    }
+    function show(urls, anchorEl, referenceEl, tags, onSaveTags, intervalMs = 2000, onImageClick) {
+        if (editing)
+            return; // 编辑中不切换
+        teardown();
+        const hasTags = tags && (tags.positive || tags.negative);
+        if (!urls.length && !hasTags)
+            return;
+        currentUrls = urls;
+        const token = resolveThemeToken();
+        tooltip = document.createElement("div");
+        tooltip.className = "a1r-model-preview";
+        // 滞留显示：鼠标进入 tooltip 时取消移除，离开时延迟移除
+        tooltip.addEventListener("mouseenter", cancelRemoveTimer);
+        tooltip.addEventListener("mouseleave", scheduleRemove);
+        // 阻止所有指针事件冒泡，防止 PrimeVue outside-click 关闭下拉菜单
+        for (const evt of ["mousedown", "mouseup", "click", "pointerdown", "pointerup"]) {
+            tooltip.addEventListener(evt, (ev) => ev.stopPropagation());
+        }
+        // 图片容器（双缓冲交叉淡入淡出）
+        if (urls.length > 0) {
+            const imgBox = document.createElement("div");
+            imgBox.className = "a1r-model-preview-imgbox";
+            imgBox.style.boxShadow = `0 6px 20px ${hexToRGBA(token.color.shadow, 0.5)}`;
+            const container = document.createElement("div");
+            container.className = "a1r-model-preview-container";
+            imgA = document.createElement("img");
+            imgA.className = "a1r-model-preview-img";
+            imgA.src = urls[0];
+            imgA.style.opacity = "1";
+            imgB = document.createElement("img");
+            imgB.className = "a1r-model-preview-img";
+            imgB.style.opacity = "0";
+            container.appendChild(imgA);
+            container.appendChild(imgB);
+            imgBox.appendChild(container);
+            tooltip.appendChild(imgBox);
+            // 点击打开预览编辑器（如有回调）或大图
+            container.style.cursor = "pointer";
+            container.addEventListener("click", (e) => {
+                e.stopPropagation();
+                if (activeCloseEditor) {
+                    activeCloseEditor(false);
+                    return;
+                }
+                if (onImageClick) {
+                    teardown();
+                    onImageClick();
+                }
+                else {
+                    openLightbox(urls, currentIndex);
+                }
+            });
+        }
+        // 标签区域（纵向排列，整体在图片右侧）
+        // activeCloseEditor: 指向当前打开的编辑器的关闭函数
+        let activeCloseEditor = null;
+        if (hasTags) {
+            const tagsWrapper = document.createElement("div");
+            tagsWrapper.className = "a1r-model-preview-tags-wrapper";
+            // 保存当前 positive/negative 值（编辑时更新）
+            const editState = { positive: tags.positive || "", negative: tags.negative || "" };
+            function makeTagSection(type, text) {
+                const section = document.createElement("div");
+                section.className = "a1r-model-preview-tag-box";
+                const label = document.createElement("div");
+                label.className = `a1r-model-preview-tags-label a1r-model-preview-tags-label--${type}`;
+                label.textContent = type === "positive" ? "Positive" : "Negative";
+                const content = document.createElement("div");
+                content.className = "a1r-model-preview-tags-content";
+                content.textContent = text;
+                content.style.cursor = "pointer";
+                // 点击 tag-box 区域（含 label）退出编辑
+                section.addEventListener("click", (e) => {
+                    // 来自 content / editor 内部的事件不在此处理
+                    if (e.target?.closest?.(".a1r-model-preview-tags-content, .a1r-model-preview-tags-editor"))
+                        return;
+                    e.stopPropagation();
+                    if (activeCloseEditor)
+                        activeCloseEditor(false);
+                });
+                content.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    // 已在编辑状态则跳过（本 section 自己的编辑器）
+                    if (section.querySelector(".a1r-model-preview-tags-editor"))
+                        return;
+                    // 关闭其他 section 的编辑器
+                    if (activeCloseEditor)
+                        activeCloseEditor(false);
+                    cancelRemoveTimer();
+                    editing = true;
+                    installOutsideClickHandler();
+                    const editor = document.createElement("div");
+                    editor.className = "a1r-model-preview-tags-editor";
+                    const textarea = document.createElement("textarea");
+                    textarea.className = "a1r-model-preview-tags-textarea";
+                    textarea.value = editState[type];
+                    textarea.rows = 3;
+                    textarea.spellcheck = false;
+                    function closeEditor(save) {
+                        if (save) {
+                            editState[type] = textarea.value;
+                            content.textContent = textarea.value;
+                            if (onSaveTags)
+                                onSaveTags(editState.positive, editState.negative);
+                        }
+                        content.style.display = "";
+                        editor.remove();
+                        editing = false;
+                        if (activeCloseEditor === closeEditor)
+                            activeCloseEditor = null;
+                        removeOutsideClickHandler();
+                    }
+                    activeCloseEditor = closeEditor;
+                    const btnRow = document.createElement("div");
+                    btnRow.className = "a1r-model-preview-tags-btn-row";
+                    const confirmBtn = document.createElement("button");
+                    confirmBtn.className = "a1r-model-preview-tags-btn a1r-model-preview-tags-btn--confirm";
+                    confirmBtn.textContent = "\u2713";
+                    confirmBtn.addEventListener("click", (ev) => {
+                        ev.stopPropagation();
+                        closeEditor(true);
+                    });
+                    const cancelBtn = document.createElement("button");
+                    cancelBtn.className = "a1r-model-preview-tags-btn a1r-model-preview-tags-btn--cancel";
+                    cancelBtn.textContent = "\u2717";
+                    cancelBtn.addEventListener("click", (ev) => {
+                        ev.stopPropagation();
+                        closeEditor(false);
+                    });
+                    textarea.addEventListener("keydown", (ev) => {
+                        if (ev.key === "Enter" && !ev.shiftKey) {
+                            ev.preventDefault();
+                            closeEditor(true);
+                        }
+                        else if (ev.key === "Escape") {
+                            ev.preventDefault();
+                            closeEditor(false);
+                        }
+                    });
+                    btnRow.appendChild(confirmBtn);
+                    btnRow.appendChild(cancelBtn);
+                    editor.appendChild(textarea);
+                    editor.appendChild(btnRow);
+                    // 替换显示文本，编辑器插入到 content 后面
+                    content.style.display = "none";
+                    section.appendChild(editor);
+                    textarea.focus();
+                });
+                section.appendChild(label);
+                section.appendChild(content);
+                return section;
+            }
+            if (tags.positive)
+                tagsWrapper.appendChild(makeTagSection("positive", tags.positive));
+            if (tags.negative)
+                tagsWrapper.appendChild(makeTagSection("negative", tags.negative));
+            tooltip.appendChild(tagsWrapper);
+        }
+        document.body.appendChild(tooltip);
+        positionTooltip(tooltip, anchorEl, referenceEl);
+        // 多图时启动循环
+        if (urls.length > 1) {
+            currentIndex = 0;
+            cycleTimer = setInterval(() => {
+                crossfadeTo(currentIndex + 1);
+            }, intervalMs);
+        }
+    }
+    return {
+        get element() { return tooltip; },
+        get isEditing() { return editing; },
+        show,
+        remove,
+        forceRemove,
+        scheduleRemove,
+        fetchModelPreviews,
     };
 }

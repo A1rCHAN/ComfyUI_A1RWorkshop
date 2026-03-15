@@ -159,9 +159,9 @@
   outline: none;
   border: none;
 }
-.a1r-combo:hover {
+/* .a1r-combo:hover {
   background: var(--a1r-color-widget);
-}
+} */
 
 /* === Textarea === */
 .a1r-textarea {
