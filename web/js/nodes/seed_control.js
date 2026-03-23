@@ -20,10 +20,6 @@ function updateSeedHistory(node, seedValue) {
             node._onHistoryChange();
     }
 }
-function getControlMode(node) {
-    const controlWidget = node.widgets.find((w) => w.name === "control_after_generate");
-    return controlWidget ? controlWidget.value : "fixed";
-}
 function getCurrentSeed(node) {
     const seedWidget = node.widgets.find((w) => w.name === "seed");
     return seedWidget ? seedWidget.value : 0;
@@ -61,32 +57,6 @@ async function queuePromptWithSeed(node, targetSeed) {
         if (node.currentOperationId === operationId) {
             node.forcedSeed = null;
             node.isExecuting = false;
-        }
-    }
-}
-// ========== Control Widget 更新 ==========
-function setControlAfterGenerate(node, value) {
-    const controlWidget = node.widgets.find((w) => w.name === "control_after_generate");
-    if (!controlWidget || controlWidget.value === value)
-        return;
-    controlWidget.value = value;
-    // Nodes 2.0: 强制 WidgetWithControl 组件卸载再重新挂载以刷新图标。
-    //
-    // safeWidgets 由 reactiveComputed 驱动，node.widgets 是 shallowReactive 数组。
-    // WidgetWithControl.vue 用 ref() 一次性初始化 controlModel，
-    // 外部直接修改 controlWidget.value 不会触发 Vue 图标更新。
-    //
-    // 方法：先移除 seedWidget（数组变短 → Vue 触发、组件卸载），
-    // 再在下一宏任务中插回（数组变长 → Vue 触发、组件以新 controlModel 重挂载）。
-    // 不能 splice(idx,1,same) 放回同引用——Vue 3 Proxy 检测到新旧引用相同会跳过通知。
-    const seedWidget = node.widgets.find((w) => w.name === "seed");
-    if (seedWidget) {
-        const idx = node.widgets.indexOf(seedWidget);
-        if (idx >= 0) {
-            node.widgets.splice(idx, 1);
-            setTimeout(() => {
-                node.widgets.splice(idx, 0, seedWidget);
-            }, 0);
         }
     }
 }
@@ -188,7 +158,6 @@ function createButtonWidget(node) {
     }
     function selectHistorySeed(seed) {
         closePopover();
-        setControlAfterGenerate(node, "fixed");
         const seedWidget = node.widgets.find((w) => w.name === "seed");
         if (!seedWidget)
             return;
@@ -370,7 +339,6 @@ function createButtonWidget(node) {
         manualBtn.dataset.cooldown = "true";
         manualBtn.style.opacity = "0.5";
         node.isRestoring = false;
-        setControlAfterGenerate(node, "fixed");
         const newSeed = generateRandomSeed(node);
         if (newSeed !== null) {
             setTimeout(() => {
@@ -420,16 +388,7 @@ app.registerExtension({
                 if (node.comfyClass === "SeedControl") {
                     const nodeId = node.id;
                     if (prompt.output && prompt.output[nodeId]) {
-                        let seed;
-                        if (node.forcedSeed !== null) {
-                            seed = node.forcedSeed;
-                        }
-                        else if (getControlMode(node) === "fixed") {
-                            seed = getCurrentSeed(node);
-                        }
-                        else {
-                            seed = getCurrentSeed(node);
-                        }
+                        const seed = node.forcedSeed !== null ? node.forcedSeed : getCurrentSeed(node);
                         prompt.output[nodeId].inputs.seed = seed;
                         node.pendingSeeds.push(seed);
                     }

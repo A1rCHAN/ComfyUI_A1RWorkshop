@@ -3,7 +3,7 @@ import { app } from "/scripts/app.js";
 import { showCanvasSettingDialog } from "../helper/canvas_setting.js";
 import { SIZE_PRESETS, create2DSliderWidget, forceRefresh, forceUpdateWidgetValue, restoreWidgetRange, saveWidgetRange, } from "../helper/canvas_widget.js";
 import { initGlobalThemeCSSVar, injectCSS } from "../theme/themeWatcher.js";
-const openCanvasSetting = async (node) => {
+export const openCanvasSetting = async (node) => {
     const widgetWidth = node.widgets.find((w) => w.name === "width");
     const widgetHeight = node.widgets.find((w) => w.name === "height");
     const targetWidgets = [widgetWidth, widgetHeight].filter((w) => w);
@@ -197,10 +197,5 @@ app.registerExtension({
             }
             return r;
         };
-    },
-    getNodeMenuItems(node) {
-        if (node.comfyClass !== "SizeCanvas")
-            return [];
-        return [null, { content: "Canvas Setting", callback: () => openCanvasSetting(node) }];
     },
 });
