@@ -1,32 +1,34 @@
 // @ts-expect-error ComfyUI frontend module
 import { app } from "/scripts/app.js";
 import { initGlobalThemeCSSVar, injectCSS } from "../theme/themeWatcher.js";
-import { createCollectorButton, ensureCollectButtonAtBottom, stopCollectorForRemovedNode } from "../helper/collector.js";
-import { collectWidgets, getCollectedRecords, cleanupMirrorBindings, syncCollectedRecordsToProperties, rebuildCollectedRecords, restoreCollectedWidgets, COLLECTOR_SESSION_KEY, getCollectButtonFromNode, setCollectButtonInactive, deactivateCollect, } from "../helper/collectorWidget.js";
+import { createCollectorButton, stopCollectorForRemovedNode } from "../helper/collector.js";
+import { BUTTON_TEXTS, collectNodes, getDefaultDisabledMode, getCollectedRecords, cleanupMirrorBindings, syncCollectedRecordsToProperties, normalizeDisabledMode, rebuildCollectedRecords, restoreCollectedNodes, COLLECTOR_SESSION_KEY, getCollectButtonFromNode, setCollectButtonInactive, deactivateCollect, restoreAllTargetNodeModes, } from "../helper/collectorNode.js";
 function createActiveButton(node) {
     const binding = createCollectorButton(node, {
-        text: "collect widgets",
+        text: BUTTON_TEXTS.inactive,
         ellipsis: true,
-        serialize: false,
-        widgetName: "seed_buttons",
-        widgetType: "SEED_BUTTONS",
-        buttonRefKey: "__a1rCollectButton",
-        widgetRefKey: "__a1rCollectButtonWidget",
-        onClick: (_event, button) => collectWidgets(node, button),
+        serialize: true,
+        widgetName: "mode_collect_button",
+        widgetType: "MODE_COLLECT_BUTTON",
+        buttonRefKey: "__a1rModeCollectButton",
+        widgetRefKey: "__a1rModeCollectButtonWidget",
+        onClick: (_event, button) => {
+            collectNodes(node, button);
+        },
     });
-    ensureCollectButtonAtBottom(node);
     return binding.widget;
 }
 app.registerExtension({
-    name: "a1rworkshop.widgetcollector",
+    name: "a1rworkshop.modecollector",
     async setup() {
         initGlobalThemeCSSVar();
         injectCSS("../../css/a1r-collector.css", import.meta.url);
     },
     async nodeCreated(node) {
-        if (node.comfyClass !== "WidgetCollector")
+        if (node.comfyClass !== "ModeCollector")
             return;
         node.properties = node.properties || {};
+        node.properties._default_disabled_mode = getDefaultDisabledMode(node);
         getCollectedRecords(node);
         cleanupMirrorBindings(node);
         const originalOnSerialize = node.onSerialize;
@@ -37,7 +39,8 @@ app.registerExtension({
             syncCollectedRecordsToProperties(this);
             if (o && typeof o === "object") {
                 o.properties = o.properties || {};
-                o.properties._collected_widgets = this.properties?._collected_widgets || [];
+                o.properties._collected_nodes = this.properties?._collected_nodes || [];
+                o.properties._default_disabled_mode = this.properties?._default_disabled_mode || 4;
             }
         };
         const originalOnConfigure = node.onConfigure;
@@ -45,9 +48,11 @@ app.registerExtension({
             if (typeof originalOnConfigure === "function") {
                 originalOnConfigure.apply(this, arguments);
             }
-            const rawRecords = info?.properties?._collected_widgets ?? this.properties?._collected_widgets;
+            const rawRecords = info?.properties?._collected_nodes ?? this.properties?._collected_nodes;
+            this.properties = this.properties || {};
+            this.properties._default_disabled_mode = normalizeDisabledMode(info?.properties?._default_disabled_mode ?? this.properties?._default_disabled_mode);
             rebuildCollectedRecords(this, rawRecords);
-            restoreCollectedWidgets(this);
+            restoreCollectedNodes(this);
         };
         const originalOnRemoved = node.onRemoved;
         node.onRemoved = function (...args) {
@@ -58,12 +63,13 @@ app.registerExtension({
                 setButtonInactive: setCollectButtonInactive,
                 onDeactivate: deactivateCollect,
             });
+            restoreAllTargetNodeModes(this);
             cleanupMirrorBindings(this);
             if (typeof originalOnRemoved === "function") {
                 originalOnRemoved.apply(this, args);
             }
         };
         createActiveButton(node);
-        restoreCollectedWidgets(node);
+        restoreCollectedNodes(node);
     },
 });

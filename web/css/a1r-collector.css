@@ -14,6 +14,116 @@
   display: none !important;
 }
 
+.collector-active .collector-title-target {
+  position: relative;
+  z-index: 999;
+}
+
+.collector-title-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+
+  border-radius: 15px 15px 0 0;
+  cursor: pointer;
+  pointer-events: auto;
+  background: transparent;
+  outline: none;
+
+  box-shadow: 0 4px 12px var(--a1r-color-shadow-alpha);
+}
+.collector-title-overlay::after {
+  content: attr(data-node-title);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  
+  max-width: calc(100% - 20px);
+  padding: 2px 8px;
+  border-radius: var(--a1r-radius-sm);
+  
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--a1r-color-text);
+  font-weight: 600;
+  text-shadow: 0 2px 4px var(--a1r-color-shadow-alpha);
+  
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.9;
+}
+
+.collector-title-overlay:hover {
+  background: color-mix(in srgb, var(--a1r-color-text) 15%, transparent);
+}
+
+.collector-title-overlay.collector-selected {
+  background: color-mix(in srgb, var(--a1r-color-menu) 50%, transparent);
+  outline: 2px solid var(--a1r-color-text);
+}
+
+.collector-title-overlay.collector-selected::after {
+  opacity: 1;
+}
+
+/* 镜像节点标题栏遮罩（用于 ModeCollector 自身的镜像行） */
+.collector-title-overlay-mirror {
+  cursor: grab;
+}
+
+.collector-title-overlay-mirror .collector-title-overlay-delete {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0;
+  
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  
+  line-height: 1;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  
+  color: var(--a1r-color-text);
+  background: color-mix(in srgb, var(--a1r-color-menu) 70%, transparent);
+  box-shadow: 0 2px 6px var(--a1r-color-shadow-alpha);
+}
+
+.collector-title-overlay-mirror.collector-mirror-manage {
+  cursor: grab;
+  background: color-mix(in srgb, var(--a1r-color-text) 20%, transparent);
+  outline: 2px dashed color-mix(in srgb, var(--a1r-color-text) 70%, transparent);
+}
+
+.collector-title-overlay-mirror.collector-mirror-dragging {
+  opacity: 0.45;
+  cursor: grabbing;
+}
+
+.collector-title-overlay-mirror.collector-mirror-drop-before {
+  box-shadow:
+    0 4px 12px var(--a1r-color-shadow-alpha),
+    inset 0 2px 0 0 var(--a1r-color-text);
+}
+
+.collector-title-overlay-mirror.collector-mirror-drop-after {
+  box-shadow:
+    0 4px 12px var(--a1r-color-shadow-alpha),
+    inset 0 -2px 0 0 var(--a1r-color-text);
+}
+
 .collector-active .collector-target-row {
   position: relative;
   z-index: 999;
@@ -46,16 +156,6 @@
 .collector-overlay-container.collector-overlay-container-mirror.a1r-container {
   cursor: grab;
 }
-
-/* .collector-canvas-blocker {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-
-  background: transparent;
-  pointer-events: auto;
-  cursor: default;
-} */
 
 /* 每个 widget 遮罩块 */
 .collector-overlay {

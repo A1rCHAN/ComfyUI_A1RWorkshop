@@ -6,7 +6,7 @@ class SizeCanvas(io.ComfyNode):
         return io.Schema(
             node_id="SizeCanvas",
             display_name="Size Canvas",
-            category="A1R Workspace/Config Pads",
+            category="A1R Workshop/Config Pads",
             inputs=[
                 io.Combo.Input(
                     "preset",
@@ -84,7 +84,7 @@ class SeedControl(io.ComfyNode):
         return io.Schema(
             node_id="SeedControl",
             display_name="Seed Control",
-            category="A1R Workspace/Config Pads",
+            category="A1R Workshop/Config Pads",
             inputs=[
                 io.Int.Input(
                     "seed",
@@ -108,7 +108,7 @@ class WidgetCollector(io.ComfyNode):
         return io.Schema(
             node_id="WidgetCollector",
             display_name="Widget Collector",
-            category="A1R Workspace/Config Pads",
+            category="A1R Workshop/Config Pads",
             inputs=[],
             outputs=[]
         )
@@ -121,9 +121,9 @@ class NodeCollector(io.ComfyNode):
     @classmethod
     def define_schema(cls) -> io.Schema:
         return io.Schema(
-            node_id="NodeCollector",
-            display_name="Node Collector",
-            category="A1R Workspace/Config Pads",
+            node_id="ModeCollector",
+            display_name="Mode Collector",
+            category="A1R Workshop/Config Pads",
             inputs=[],
             outputs=[]
         )
