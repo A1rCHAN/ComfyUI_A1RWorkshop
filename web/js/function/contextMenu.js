@@ -1,4 +1,3 @@
-// @ts-expect-error ComfyUI 运行时注入模块
 import { app } from "/scripts/app.js";
 import { initConfig, isModelLoaderNode, getModelFromNode, } from "../data/config_model.js";
 import { showEditor } from "../helper/editor_window.js";

@@ -1,12 +1,3 @@
-/**
- * ModelPicker — 模型图像选单组件
- *
- * 复刻 ComfyUI Nodes 2.0 Load Image 节点的图像选择面板。
- * 用于拦截 checkpoint / lora 等模型加载节点的 combo 选择。
- *
- * 公开接口：
- *   openModelPicker(options): Promise<string | null>
- */
 import { ModelMetadata } from "../data/config_model.js";
 const MODEL_PREVIEW_UPDATED_EVENT = "a1r:model-preview-updated";
 const WIDGET_TO_FOLDER = {
@@ -30,9 +21,6 @@ const FOLDER_TO_CATEGORY = {
     ipadapter: "IPAdapters",
     upscale_models: "Upscalers",
 };
-/* ======================================== */
-/* === 工具函数                         === */
-/* ======================================== */
 function inferFolder(widgetName) {
     const lower = widgetName.toLowerCase();
     if (WIDGET_TO_FOLDER[lower])
@@ -61,7 +49,6 @@ function buildPreviewUrl(folder, pathIndex, filename) {
 function extractDisplayName(fullPath) {
     return new ModelMetadata(fullPath).getDisplayName();
 }
-/** 缓存：folder → Map<modelName, BackendModelFile> */
 const _modelFileCache = new Map();
 async function loadModelFiles(folder) {
     if (_modelFileCache.has(folder))
@@ -82,7 +69,6 @@ async function loadModelFiles(folder) {
         return new Map();
     }
 }
-/** 预览图可达性缓存 */
 const _previewReachable = new Map();
 let _previewInvalidationListenerInstalled = false;
 let _activeRefreshItems = null;
@@ -128,7 +114,6 @@ async function buildPickerItems(values, widgetName) {
     const folder = inferFolder(widgetName);
     const backendFiles = await loadModelFiles(folder);
     const items = [];
-    // 批量检测预览图
     const urlChecks = [];
     for (const value of values) {
         const backendFile = backendFiles.get(value);
@@ -146,7 +131,6 @@ async function buildPickerItems(values, widgetName) {
         items.push(item);
         urlChecks.push({ idx: items.length - 1, url: previewUrl });
     }
-    // 并发检查预览图是否可用（限并发 20）
     const BATCH = 20;
     for (let i = 0; i < urlChecks.length; i += BATCH) {
         const batch = urlChecks.slice(i, i + BATCH);
@@ -159,16 +143,8 @@ async function buildPickerItems(values, widgetName) {
     }
     return items;
 }
-/* ======================================== */
-/* === 多文件夹支持（跨类型选单）       === */
-/* ======================================== */
-/**
- * 当 combo 混合多种来源时（例如将来扩展），按文件夹分组。
- * 目前每个 combo 只对应一种 folder，但预留多 folder 支持。
- */
 async function buildMultiFolderItems(values, widgetName) {
     const items = await buildPickerItems(values, widgetName);
-    // 只保留有预览图的分类
     const categorySet = new Set();
     for (const item of items) {
         if (item.previewUrl) {
@@ -178,16 +154,10 @@ async function buildMultiFolderItems(values, widgetName) {
     const categories = Array.from(categorySet).sort();
     return { items, categories };
 }
-/* ======================================== */
-/* === SVG 图标                         === */
-/* ======================================== */
 const ICON_SEARCH = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
 const ICON_SORT = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5h10"/><path d="M11 9h7"/><path d="M11 13h4"/><path d="M3 17l3 3 3-3"/><path d="M6 18V4"/></svg>`;
 const ICON_GRID = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>`;
 const ICON_LIST = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>`;
-/* ======================================== */
-/* === DOM 构建                         === */
-/* ======================================== */
 function createPickerPanel() {
     const el = document.createElement("div");
     el.className = "a1r-picker-panel";
@@ -215,7 +185,6 @@ function createTabBar(categories, activeTab, onTabClick) {
 function createToolbar(state) {
     const bar = document.createElement("div");
     bar.className = "a1r-picker-toolbar";
-    // 搜索框
     const searchWrapper = document.createElement("div");
     searchWrapper.className = "a1r-picker-search-wrapper";
     const searchIcon = document.createElement("span");
@@ -233,7 +202,6 @@ function createToolbar(state) {
     searchWrapper.appendChild(searchIcon);
     searchWrapper.appendChild(searchInput);
     bar.appendChild(searchWrapper);
-    // 排序按钮
     const sortBtn = document.createElement("button");
     sortBtn.type = "button";
     sortBtn.className = "a1r-picker-toolbar-btn";
@@ -244,7 +212,6 @@ function createToolbar(state) {
         state.render();
     });
     bar.appendChild(sortBtn);
-    // 列表视图按钮
     const listBtn = document.createElement("button");
     listBtn.type = "button";
     listBtn.className = "a1r-picker-toolbar-btn" + (state.viewMode === "list" ? " a1r-picker-toolbar-btn--active" : "");
@@ -255,7 +222,6 @@ function createToolbar(state) {
         state.render();
     });
     bar.appendChild(listBtn);
-    // 网格视图按钮
     const gridBtn = document.createElement("button");
     gridBtn.type = "button";
     gridBtn.className = "a1r-picker-toolbar-btn" + (state.viewMode === "grid" ? " a1r-picker-toolbar-btn--active" : "");
@@ -338,17 +304,14 @@ function createListItem(item, isSelected, onClick) {
 }
 function filterAndSort(state) {
     let result = [...state.items];
-    // 分类筛选
     if (state.activeTab !== "All") {
         result = result.filter((item) => item.category === state.activeTab);
     }
-    // 搜索
     if (state.searchQuery.trim()) {
         const q = state.searchQuery.toLowerCase().trim();
         result = result.filter((item) => item.displayName.toLowerCase().includes(q) ||
             item.value.toLowerCase().includes(q));
     }
-    // 排序
     result.sort((a, b) => {
         const cmp = a.displayName.localeCompare(b.displayName);
         return state.sortOrder === "name-asc" ? cmp : -cmp;
@@ -404,7 +367,6 @@ function renderPanel(state) {
     if (!panel)
         return;
     panel.innerHTML = "";
-    // 标签栏（只有存在带预览图的分类才显示）
     if (state.categories.length > 0) {
         const tabs = createTabBar(state.categories, state.activeTab, (tab) => {
             state.activeTab = tab;
@@ -412,22 +374,16 @@ function renderPanel(state) {
         });
         panel.appendChild(tabs);
     }
-    // 工具栏
     const toolbar = createToolbar(state);
     panel.appendChild(toolbar);
-    // 内容区
     const content = document.createElement("div");
     content.className = "a1r-picker-content";
     state.contentEl = content;
     panel.appendChild(content);
     renderContent(state);
-    // 搜索框自动聚焦
     const search = panel.querySelector(".a1r-picker-search");
     search?.focus();
 }
-/* ======================================== */
-/* === 打开 / 关闭                      === */
-/* ======================================== */
 let _activeOverlay = null;
 let _keydownHandler = null;
 function closePanel(state) {
@@ -443,14 +399,8 @@ function closePanel(state) {
     state.contentEl = null;
     _activeRefreshItems = null;
 }
-/**
- * 打开模型图像选单。
- *
- * @returns 用户选择的 combo 值，取消返回 null。
- */
 export async function openModelPicker(options) {
     installPreviewInvalidationListener();
-    // 若已有打开的面板则先关闭
     if (_activeOverlay) {
         _activeOverlay.remove();
         _activeOverlay = null;
@@ -469,28 +419,23 @@ export async function openModelPicker(options) {
         onSelect: options.onSelect || null,
         render: () => renderPanel(state),
     };
-    // overlay
     const overlay = document.createElement("div");
     overlay.className = "a1r-overlay";
     _activeOverlay = overlay;
-    // panel
     const panel = createPickerPanel();
     state.panelEl = panel;
-    // 显示加载指示
     const loadingEl = document.createElement("div");
     loadingEl.className = "a1r-picker-loading";
     loadingEl.innerHTML = `<div class="a1r-picker-spinner"></div><span>Loading models...</span>`;
     panel.appendChild(loadingEl);
     overlay.appendChild(panel);
     document.body.appendChild(overlay);
-    // overlay 点击关闭
     overlay.addEventListener("click", (e) => {
         if (e.target === overlay) {
             state.resolve?.(null);
             closePanel(state);
         }
     });
-    // ESC 关闭
     _keydownHandler = (e) => {
         if (e.key === "Escape") {
             state.resolve?.(null);
@@ -498,11 +443,9 @@ export async function openModelPicker(options) {
         }
     };
     window.addEventListener("keydown", _keydownHandler);
-    // 返回 Promise
     const result = new Promise((resolve) => {
         state.resolve = resolve;
     });
-    // 异步加载数据
     const refreshItems = async () => {
         const { items, categories } = await buildMultiFolderItems(options.values, options.widgetName);
         state.items = items;

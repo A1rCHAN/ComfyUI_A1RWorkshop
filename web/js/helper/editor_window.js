@@ -204,7 +204,7 @@ function createModelSection(options) {
             display.textContent = fileName.replace(/\.(safetensors|ckpt|pt|bin|model|onnx|tflite|gguf|ggjt|gguf2)$/i, "");
             wrapper.appendChild(display);
         }
-        else { // options.mode === "select"
+        else {
             const selector = createCombo();
             selector.classList.add("a1r-editor-model-selector");
             selector.dataset.role = "model-selector";

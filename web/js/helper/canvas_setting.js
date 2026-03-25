@@ -47,7 +47,6 @@ export function showCanvasSettingDialog({ currentMin, currentMax, currentStep, o
         builder.open().then(resolve);
     });
 }
-// ========== Range Section ==========
 function createRangeSection(state, cleanupFns, updaters) {
     const container = document.createElement("div");
     container.className = "a1r-slider-section";
@@ -82,7 +81,6 @@ function createRangeSection(state, cleanupFns, updaters) {
     wrapper.appendChild(maxDisplay);
     row.appendChild(label);
     row.appendChild(wrapper);
-    // 视觉更新
     const updateVisual = () => {
         minDisplay.textContent = state.rangeMinValue.toString();
         maxDisplay.textContent = state.rangeMaxValue.toString();
@@ -95,7 +93,6 @@ function createRangeSection(state, cleanupFns, updaters) {
         maxThumb.style.left = `calc(${R}px + (100% - ${R * 2}px) * ${maxPct / 100})`;
     };
     updaters.rangeUpdateVisual = updateVisual;
-    // 事件
     const onMouseDown = (e) => {
         state.peakStepValue = state.rangeStepValue;
         const rect = sliderContainer.getBoundingClientRect();
@@ -244,7 +241,6 @@ function createRangeSection(state, cleanupFns, updaters) {
     container.appendChild(row);
     return container;
 }
-// ========== Step Section ==========
 function createStepSection(state, cleanupFns, updaters) {
     const container = document.createElement("div");
     container.className = "a1r-slider-section";
@@ -278,7 +274,6 @@ function createStepSection(state, cleanupFns, updaters) {
     wrapper.appendChild(valueDisplay);
     row.appendChild(label);
     row.appendChild(wrapper);
-    // 视觉更新
     const updateVisual = () => {
         valueDisplay.textContent = state.rangeStepValue.toString();
         const R = state.THUMB_RADIUS;
@@ -287,7 +282,6 @@ function createStepSection(state, cleanupFns, updaters) {
         stepThumb.style.left = `calc(${R}px + (100% - ${R * 2}px) * ${stepPct / 100})`;
     };
     updaters.stepUpdateVisual = updateVisual;
-    // 同步 range 到 step
     const syncRangeToStep = () => {
         const stepVal = state.rangeStepValue;
         if (stepVal <= state.peakStepValue)
@@ -311,7 +305,6 @@ function createStepSection(state, cleanupFns, updaters) {
         if (updaters.rangeUpdateVisual)
             updaters.rangeUpdateVisual();
     };
-    // step 坐标转换
     const stepPxToValue = (mouseX, rect) => {
         const trackWidth = rect.width - state.THUMB_RADIUS * 2;
         const x = mouseX - state.THUMB_RADIUS;
@@ -322,7 +315,6 @@ function createStepSection(state, cleanupFns, updaters) {
     const stepValueToThumbX = (val, rect) => {
         return state.THUMB_RADIUS + ((val - state.STEP_MIN) / (state.STEP_MAX - state.STEP_MIN)) * (rect.width - state.THUMB_RADIUS * 2);
     };
-    // 事件
     const onMouseDown = (e) => {
         const rect = sliderContainer.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
@@ -404,7 +396,6 @@ function createStepSection(state, cleanupFns, updaters) {
     container.appendChild(row);
     return container;
 }
-// ========== 工具函数 ==========
 function snapSlider(value, stepValue, snap2Max, state) {
     const snapped = Math.round(value / stepValue) * stepValue;
     if (snap2Max && snapped > state.MAX_RANGE - stepValue)

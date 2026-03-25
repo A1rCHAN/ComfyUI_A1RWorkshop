@@ -1,11 +1,8 @@
-// @ts-expect-error ComfyUI 运行时注入模块
 import { app } from "/scripts/app.js";
-// @ts-expect-error ComfyUI 运行时注入模块
 import { api } from "/scripts/api.js";
 import { createContainer, createButton, hexToRGBA } from "../theme/themeUtils.js";
 import { initGlobalThemeCSSVar, injectCSS, resolveThemeToken } from "../theme/themeWatcher.js";
 import { snapshotImagesForSeed, createPreviewTooltip, deleteCachedImages, isLightboxOpen } from "../helper/popover.js";
-// ========== 辅助函数 ==========
 function updateSeedHistory(node, seedValue) {
     if (node.seedHistory.length === 0 || node.seedHistory[0] !== seedValue) {
         node.seedHistory.unshift(seedValue);
@@ -60,7 +57,6 @@ async function queuePromptWithSeed(node, targetSeed) {
         }
     }
 }
-// ========== 节点状态初始化 ==========
 function initNodeState(node) {
     node.seedHistory = [];
     node.seedImageMap = new Map();
@@ -71,13 +67,12 @@ function initNodeState(node) {
     node.currentOperationId = null;
     node.buttonCooldown = { left: false };
     node.isHandlingControlChange = false;
-    node.pendingSeeds = []; // FIFO: graphToPrompt 时压入，执行完成时弹出
+    node.pendingSeeds = [];
     node.executingSeed = null;
     node.queuedSeed = null;
     node.progressValue = 0;
     node.progressMax = 0;
 }
-// ========== Widget 拦截器 ==========
 function setupSeedWidgetInterceptor(node) {
     const seedWidget = node.widgets.find((w) => w.name === "seed");
     if (!seedWidget)
@@ -110,7 +105,6 @@ function setupControlWidgetInterceptor(node) {
         node.isHandlingControlChange = false;
     };
 }
-// ========== 按钮部件 ==========
 function createButtonWidget(node) {
     const container = createContainer();
     container.classList.add("a1r-seed-container");
@@ -120,19 +114,16 @@ function createButtonWidget(node) {
     historyBtn.classList.add("a1r-seed-button", "a1r-seed-history");
     container.appendChild(manualBtn);
     container.appendChild(historyBtn);
-    // ===== pull history 状态管理 =====
     function updateHistoryBtnState() {
         const hasPending = node.pendingSeeds.length > 0;
         const hasHistory = node.seedHistory.length >= 2;
         historyBtn.disabled = !(hasPending || hasHistory);
     }
-    // ===== 冷却控制 =====
     function resetManualBtn() {
         node.buttonCooldown.left = false;
         manualBtn.dataset.cooldown = "false";
         manualBtn.style.opacity = "1";
     }
-    // ===== 种子历史下拉菜单 =====
     let popover = null;
     const preview = createPreviewTooltip();
     function closePopover() {
@@ -146,7 +137,6 @@ function createButtonWidget(node) {
         updateHistoryBtnState();
     }
     function onOutsideClick(e) {
-        // lightbox 打开时不处理外部点击，避免关闭大图时连带关闭 popover
         if (isLightboxOpen())
             return;
         const target = e.target;
@@ -211,17 +201,14 @@ function createButtonWidget(node) {
         preview.remove();
         fullRebuildPopover();
     }
-    /** 完整重建 popover 内容（结构变化时使用） */
     function fullRebuildPopover() {
         if (!popover)
             return;
-        // 清除已有内容
         popover.innerHTML = "";
         const title = document.createElement("div");
         title.className = "a1r-seed-popover-title";
         title.textContent = "Seed History";
         popover.appendChild(title);
-        // ===== 队列中的种子（pendingSeeds）=====
         const pending = node.pendingSeeds;
         if (pending.length > 0) {
             pending.forEach((seed, i) => {
@@ -229,7 +216,6 @@ function createButtonWidget(node) {
                 const item = document.createElement("div");
                 item.className = "a1r-seed-popover-item a1r-seed-popover-item--queue";
                 item.dataset.queueIndex = String(i);
-                // 进度条背景
                 const progressBar = document.createElement("div");
                 progressBar.className = "a1r-seed-progress";
                 if (isExecuting && node.progressMax > 0) {
@@ -252,7 +238,6 @@ function createButtonWidget(node) {
                 popover.appendChild(item);
             });
         }
-        // ===== 历史种子 =====
         const historySeeds = node.seedHistory;
         historySeeds.forEach((seed, i) => {
             const isTop = i === 0 && pending.length === 0;
@@ -277,7 +262,6 @@ function createButtonWidget(node) {
                     selectHistorySeed(seed);
                 });
             }
-            // 悬浮预览图像（点击可查看大图）
             if (node.seedImageMap.has(seed)) {
                 const urls = node.seedImageMap.get(seed);
                 item.addEventListener("mouseenter", () => preview.show(urls, item, popover));
@@ -287,13 +271,11 @@ function createButtonWidget(node) {
         });
         positionPopover();
     }
-    /** 仅更新进度条，不重建 DOM（避免 hover 闪烁） */
     function updateProgressOnly() {
         if (!popover)
             return;
         const queueItems = popover.querySelectorAll(".a1r-seed-popover-item--queue");
         const pending = node.pendingSeeds;
-        // 如果队列数量变了，需要完整重建
         if (queueItems.length !== pending.length) {
             fullRebuildPopover();
             return;
@@ -315,20 +297,17 @@ function createButtonWidget(node) {
                 badge.textContent = isExecuting ? "running" : "queued";
         });
     }
-    /** 外部调用：如果 popover 已打开，刷新其内容 */
     function refreshPopover() {
         if (popover) {
             renderPopoverItems();
         }
         updateHistoryBtnState();
     }
-    /** 仅刷新进度条（不重建 DOM，防止 hover 闪烁） */
     function refreshProgress() {
         if (popover) {
             updateProgressOnly();
         }
     }
-    // ===== manual random 点击 =====
     manualBtn.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -351,13 +330,11 @@ function createButtonWidget(node) {
             resetManualBtn();
         }
     });
-    // ===== pull history 点击 =====
     historyBtn.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
         openPopover();
     });
-    // ===== 注册为 DOM Widget =====
     const widget = node.addDOMWidget("seed_buttons", "SEED_BUTTONS", container, {
         serialize: false,
         hideOnZoom: false,
@@ -375,7 +352,6 @@ function createButtonWidget(node) {
     updateHistoryBtnState();
     return widget;
 }
-// ========== 注册扩展 ==========
 app.registerExtension({
     name: "a1rworkshop.seedcontrol",
     async setup() {
@@ -396,7 +372,6 @@ app.registerExtension({
             }
             return prompt;
         };
-        // 执行开始：从队列头部取待执行种子
         api.addEventListener("execution_start", () => {
             for (const node of app.graph._nodes) {
                 if (node.comfyClass === "SeedControl" && node.pendingSeeds.length > 0) {
@@ -407,9 +382,7 @@ app.registerExtension({
                 }
             }
         });
-        // 当前节点开始执行：将对应 SeedControl 从“队列”变为“执行中”
         api.addEventListener("executing", (evt) => {
-            // evt.detail 直接是节点 ID 字符串（非对象）
             const executingNodeId = evt.detail != null ? String(evt.detail) : "";
             for (const node of app.graph._nodes) {
                 if (node.comfyClass === "SeedControl" && String(node.id) === executingNodeId) {
@@ -422,9 +395,6 @@ app.registerExtension({
                 }
             }
         });
-        // 进度更新：追踪执行进度并刷新 popover 中的进度条
-        // progress 事件来自采样器节点（非 SeedControl 本身），
-        // 只要 SeedControl 处于"执行中"状态就应用进度。
         api.addEventListener("progress", (evt) => {
             const detail = evt.detail;
             if (!detail)
@@ -438,7 +408,6 @@ app.registerExtension({
                 }
             }
         });
-        // 执行完成后记录种子历史、快照图像、清除执行状态、刷新列表
         api.addEventListener("execution_success", async () => {
             for (const node of app.graph._nodes) {
                 if (node.comfyClass === "SeedControl") {
@@ -458,7 +427,6 @@ app.registerExtension({
                 }
             }
         });
-        // 执行失败/中断时也弹出队列，防止失步
         const discardPending = () => {
             for (const node of app.graph._nodes) {
                 if (node.comfyClass === "SeedControl") {
@@ -504,7 +472,6 @@ app.registerExtension({
                     this.seedHistory.length = this.maxHistoryLength;
                 }
             }
-            // 恢复图像缓存映射
             if (info.seedImageMap) {
                 this.seedImageMap = new Map(info.seedImageMap);
             }
@@ -517,7 +484,6 @@ app.registerExtension({
             if (originalOnSerialize)
                 originalOnSerialize.apply(this, arguments);
             info.seedHistory = this.seedHistory || [];
-            // 序列化图像缓存映射（Map → [key, value][] 数组）
             info.seedImageMap = Array.from(this.seedImageMap.entries());
         };
     },

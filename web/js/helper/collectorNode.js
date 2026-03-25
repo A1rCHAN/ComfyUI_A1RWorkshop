@@ -1,8 +1,6 @@
-// @ts-expect-error ComfyUI frontend module
 import { app } from "/scripts/app.js";
 import { createContainer, createOverlay } from "../theme/themeUtils.js";
 import { ensureWidgetAtBottom, getCollectorSessionState, syncCollectorActiveClass, setCollectorButtonState, toggleCollectorState, emitWidgetCollectorPickRequest, extractCollectorRowDisplayName, getNodeTitleSnapshot, getWidgetNameOrLabel, watchNodeTitleChanges, } from "./collector.js";
-// === Mode Collector 常量与运行态 === //
 export const COLLECTOR_SESSION_KEY = "modeCollector";
 export const BUTTON_TEXTS = {
     inactive: "collect nodes",
@@ -29,7 +27,6 @@ let mirrorDragSourceNode = null;
 let mirrorDragSourceNodeId = null;
 let mirrorDropTargetNodeKey = null;
 let mirrorDropTargetPosition = null;
-// === 基础工具：会话访问 + 序列化 + 记录归一化 === //
 function getCollectingNodeId() {
     return getCollectorSessionState(COLLECTOR_SESSION_KEY).collectingNodeId;
 }
@@ -130,7 +127,6 @@ function createRecordFromPayload(payload, targetNode, sourceNode) {
 function resolveTargetNode(record) {
     return app.graph?.getNodeById?.(record.targetNodeId) || null;
 }
-// === 目标模式策略：启用/禁用行为 + 默认模式管理 === //
 function applyTargetNodeMode(targetNode, enabled, disabledMode) {
     if (!targetNode)
         return;
@@ -162,7 +158,6 @@ function getVisibleMirrorWidgets(node) {
         return [];
     return node.widgets.filter((widget) => isMirrorWidget(widget));
 }
-// === 镜像重排交互：拖拽状态 + 落点计算 === //
 function clearMirrorDropIndicators() {
     for (const overlay of mirrorOverlayByNodeKey.values()) {
         overlay.classList.remove("collector-mirror-drop-before", "collector-mirror-drop-after");
@@ -295,7 +290,6 @@ function scheduleOverlayRefresh(sourceNode) {
         mountNodeTitleOverlays(sourceNode);
     });
 }
-// === 镜像 Widget 生命周期：创建、同步、重建、移除 === //
 function removeMirrorWidgetByKey(node, nodeKey) {
     const bindings = getMirrorBindings(node);
     const binding = bindings.get(nodeKey);
@@ -359,14 +353,12 @@ function notifyMirrorWidgetMetaChanged(node) {
         node.widgets = [...node.widgets];
     }
     catch {
-        // Ignore runtimes where widgets descriptor is read-only.
     }
     try {
         node.widgets.splice(0, 0);
         node.widgets.splice(0, 0);
     }
     catch {
-        // Ignore runtimes where widgets array patching is restricted.
     }
     if (typeof node?.onResize === "function") {
         node.onResize();
@@ -679,7 +671,6 @@ function collectSelectedNodesToNode(sourceNode) {
         app.graph.setDirtyCanvas(true, true);
     }
 }
-// === Overlay 事件保护：采集模式下的捕获拦截 === //
 function stopCollectorEvent(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -761,7 +752,6 @@ function bindCollectorGapGuards(el) {
         el.addEventListener(eventName, stopCollectorEvent);
     });
 }
-// === Overlay 挂载：容器几何更新 + 选择层渲染 === //
 function updateOverlayContainerBounds(host) {
     const container = host.querySelector(".collector-overlay-container");
     if (!container)
@@ -892,7 +882,6 @@ function onNodePicked(payload, isSelected) {
         selectedNodePayloads.delete(nodeKey);
     }
 }
-// === 变更过滤与 Overlay 重建入口 === //
 function isOverlayOnlyMutation(mutation) {
     if (mutation.type !== "childList")
         return false;
@@ -1107,114 +1096,10 @@ function mountNodeTitleOverlays(sourceNode) {
         isMountingOverlays = false;
     }
 }
-//     const perNodeIndex = new Map<number, number>()
-//     const touchedHosts = new Set<HTMLElement>()
-//     const usedMirrorNodeKeys = new Set<string>()
-//     const rows = document.querySelectorAll<HTMLElement>(".lg-node-widget")
-//     rows.forEach((row) => {
-//       const metaEl = row.querySelector<HTMLElement>("[node-id]")
-//       if (!metaEl) return
-//       const targetNodeId = Number(metaEl.getAttribute("node-id"))
-//       if (!Number.isFinite(targetNodeId)) return
-//       const idx = perNodeIndex.get(targetNodeId) ?? 0
-//       perNodeIndex.set(targetNodeId, idx + 1)
-//       if (targetNodeId === sourceNodeId) {
-//         mountSourceMirrorOverlay(row, sourceNode, sourceNodeId, usedMirrorNodeKeys)
-//         const host = row.closest<HTMLElement>(".lg-node-widgets")
-//         if (host) {
-//           touchedHosts.add(host)
-//           getOrCreateOverlayContainer(host, "grab")
-//         }
-//         return
-//       }
-//       if (idx > 0) return
-//       const targetNode = app.graph?.getNodeById?.(targetNodeId)
-//       if (targetNode?.comfyClass === "ModeCollector") return
-//       const targetNodeType = (metaEl.getAttribute("node-type") || targetNode?.type || "").trim()
-//       const targetNodeTitle = resolveNodeTitle(targetNodeId, targetNodeType)
-//       const overlay = createOverlay()
-//       overlay.classList.add("collector-overlay", "collector-overlay-node")
-//       overlay.dataset.nodeId = String(targetNodeId)
-//       overlay.dataset.nodeType = targetNodeType
-//       overlay.dataset.widgetName = targetNodeTitle
-//       const nodeKey = createNodeKey(targetNodeId)
-//       overlay.dataset.widgetKey = nodeKey
-//       applyOverlaySelectionState(overlay, nodeKey)
-//       overlay.addEventListener("pointerdown", (e) => {
-//         if (e.button !== 0) return
-//         e.preventDefault()
-//         e.stopPropagation()
-//         onNodePicked(
-//           {
-//             sourceNodeId,
-//             targetNodeId,
-//             targetNodeType,
-//             targetNodeTitle,
-//           },
-//           toggleOverlaySelection(overlay, nodeKey),
-//         )
-//         if (!selectedNodeKeys.has(nodeKey)) {
-//           return
-//         }
-//         selectTargetNodeForCollect(targetNodeId)
-//       })
-//       overlay.addEventListener("pointerup", (e) => {
-//         e.preventDefault()
-//         e.stopPropagation()
-//       })
-//       overlay.addEventListener("click", (e) => {
-//         e.preventDefault()
-//         e.stopPropagation()
-//       })
-//       row.classList.add("collector-target-row")
-//       mountedRows.add(row)
-//       row.appendChild(overlay)
-//       const host = row.closest<HTMLElement>(".lg-node-widgets")
-//       if (!host) return
-//       touchedHosts.add(host)
-//       getOrCreateOverlayContainer(host, "pointer")
-//       mountedOverlays.add(overlay)
-//     })
-//     touchedHosts.forEach((host) => {
-//       updateOverlayContainerBounds(host)
-//     })
-//     if (
-//       mirrorManageNodeId !== null &&
-//       mirrorManageNodeKey !== null &&
-//       mirrorManageNodeId === sourceNodeId &&
-//       !mirrorOverlayByNodeKey.has(mirrorManageNodeKey)
-//     ) {
-//       setMirrorManageState(null, null)
-//     }
-//   } finally {
-//     isMountingOverlays = false
-//   }
-// }
-// function findNodeTitleElements(): HTMLElement[] {
-//   const selectors = [
-//     '.litegraph .lgraphnode .node-title',
-//     '.lg-node-header',
-//     '[class*="node-title"]',
-//     '.lgraphnode > div:first-child',
-//   ]
-//   const results: HTMLElement[] = []
-//   const seen = new Set<HTMLElement>()
-//   for (const selector of selectors) {
-//     const elements = document.querySelectorAll<HTMLElement>(selector)
-//     elements.forEach((el) => {
-//       if (el.closest('.lgraphnode') && !seen.has(el)) {
-//         seen.add(el)
-//         results.push(el)
-//       }
-//     })
-//   }
-//   return results
-// }
 function findNodeTitleElements() {
     const directHeaders = Array.from(document.querySelectorAll(".lg-node[data-node-id] .lg-node-header"));
     if (directHeaders.length > 0)
         return directHeaders;
-    // Fallback for older builds or transient render frames.
     return Array.from(document.querySelectorAll(".lgraphnode .node-title"));
 }
 function getNodeIdFromTitleElement(el) {
@@ -1236,7 +1121,6 @@ function getNodeTypeFromElement(el) {
         nodeEl.getAttribute('node-type') ||
         '').trim();
 }
-// === 采集会话控制：激活/停用 + 按钮状态 === //
 function activateCollect(node) {
     console.log("[a1rworkshop.modecollector] Collecting nodes...");
     syncCollectorActiveClass();

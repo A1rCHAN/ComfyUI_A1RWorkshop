@@ -292,7 +292,6 @@ export class TagsDatabase {
                 tags = { positive: String(rawTags || ""), negative: "" };
             }
         }
-        // Ensure safe strings
         tags.positive = tags.positive?.trim() || "";
         tags.negative = tags.negative?.trim() || "";
         if (!this._data[category]) {

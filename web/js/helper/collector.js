@@ -1,4 +1,3 @@
-// @ts-expect-error ComfyUI frontend module
 import { app } from "/scripts/app.js";
 import { createButton, createContainer } from "../theme/themeUtils.js";
 const nodeTitleListenerRegistry = new WeakMap();
@@ -58,7 +57,6 @@ function hasAnyCollectorCollecting() {
 export function syncCollectorActiveClass() {
     document.documentElement.classList.toggle("collector-active", hasAnyCollectorCollecting());
 }
-// === 按钮文案与激活态 === //
 export function setCollectorButtonText(button, text) {
     const textElement = button.querySelector(".a1r-button-text");
     if (textElement) {
@@ -72,7 +70,6 @@ export function setCollectorButtonState(button, texts, activeClassName, isActive
     setCollectorButtonText(button, isActive ? texts.active : texts.inactive);
     button.classList.toggle(activeClassName, isActive);
 }
-// === Widget 排序工具 === //
 export function ensureWidgetAtBottom(node, targetWidget) {
     if (!Array.isArray(node?.widgets) || node.widgets.length <= 1)
         return;
@@ -82,7 +79,6 @@ export function ensureWidgetAtBottom(node, targetWidget) {
     node.widgets.splice(index, 1);
     node.widgets.push(targetWidget);
 }
-// === 创建 Collector DOM 按钮 Widget === //
 export function createCollectorButton(node, options) {
     const { text, onClick, disabled = false, ellipsis = false, serialize = false, widgetName = "collector_button", widgetType = "COLLECTOR_BUTTON", buttonRefKey = "__a1rCollectorButton", widgetRefKey = "__a1rCollectorButtonWidget", } = options;
     const container = createContainer();
@@ -110,7 +106,6 @@ export function createCollectorButton(node, options) {
         },
     };
 }
-// === 激活 / 提交 / 关闭 切换 === //
 export function toggleCollectorState(options) {
     const { sessionKey, node, button, getButtonFromNode, setButtonActive, setButtonInactive, onActivate, onDeactivate, onCommit, } = options;
     const session = getCollectorSessionState(sessionKey);
@@ -142,7 +137,6 @@ export function toggleCollectorState(options) {
     setButtonInactive(button);
     onDeactivate();
 }
-// === 生命周期保护：Collector 节点移除时自动停止 === //
 export function stopCollectorForRemovedNode(options) {
     const { sessionKey, removedNode, getButtonFromNode, setButtonInactive, onDeactivate, } = options;
     const session = getCollectorSessionState(sessionKey);
@@ -159,13 +153,11 @@ export function stopCollectorForRemovedNode(options) {
     }
     onDeactivate();
 }
-// === 会话重置工具 === //
 export function resetCollectorSession(sessionKey) {
     const session = getCollectorSessionState(sessionKey);
     session.isCollecting = false;
     session.collectingNodeId = null;
 }
-// === 镜像 widget 标签 === //
 export function watchNodeTitleChanges(targetNode, listener) {
     if (!targetNode || typeof targetNode !== "object")
         return null;
@@ -212,7 +204,6 @@ export function watchNodeTitleChanges(targetNode, listener) {
                         cb();
                     }
                     catch {
-                        // 监听器异常不应阻塞标题更新。
                     }
                 });
             },

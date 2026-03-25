@@ -1,4 +1,3 @@
-// @ts-expect-error ComfyUI 运行时注入模块
 import { api } from "/scripts/api.js";
 import { ModelMetadata } from "../data/config_model.js";
 import { DialogBuilder, DIALOG_TYPE } from "../theme/dialog.js";
@@ -57,7 +56,6 @@ async function renderGrid(grid, builder) {
     for (const model of withPreviews) {
         grid.appendChild(createModelCard(model, grid, builder));
     }
-    // 添加按钮
     const addCard = document.createElement("div");
     addCard.className = "a1r-pm-card a1r-pm-card--add";
     addCard.addEventListener("click", () => {

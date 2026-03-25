@@ -1,4 +1,3 @@
-// TODO: comfyui nodes2.0 检测，识别前端类型，自动切换主题
 export const FRONTEND_TYPE = {
     MODERN: "modern",
     CLASSIC: "classic",
@@ -46,9 +45,7 @@ export function detectThemeStyle() {
         case false:
             return FRONTEND_TYPE.CLASSIC;
         default:
-            // eslint-disable-next-line no-console
             console.log("Unable to detect theme style, defaulting to modern.");
             return FRONTEND_TYPE.MODERN;
     }
-    // 这里可以添加更多的检测逻辑，例如检查 DOM 结构、CSS 变量等
 }

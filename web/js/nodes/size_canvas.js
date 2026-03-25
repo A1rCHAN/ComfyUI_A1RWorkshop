@@ -1,4 +1,3 @@
-// @ts-expect-error ComfyUI 运行时注入模块
 import { app } from "/scripts/app.js";
 import { showCanvasSettingDialog } from "../helper/canvas_setting.js";
 import { SIZE_PRESETS, create2DSliderWidget, forceRefresh, forceUpdateWidgetValue, restoreWidgetRange, saveWidgetRange, } from "../helper/canvas_widget.js";

@@ -1,4 +1,3 @@
-// @ts-expect-error ComfyUI 运行时注入模块
 import { api } from "/scripts/api.js";
 import { ModelMetadata, fetchAllModelsFromAPI } from "../data/config_model.js";
 import { createCombo, createContainer, createLabel, showToast } from "../theme/themeUtils.js";
@@ -16,7 +15,6 @@ const SUPPORTED_FOLDERS = {
     checkpoints: "checkpoints",
     loras: "loras",
 };
-// ========== API ==========
 async function fetchPreviewUrls(folder, filename) {
     try {
         const resp = await api.fetchApi(`${PREVIEW_API}/model_previews?folder=${encodeURIComponent(folder)}&filename=${encodeURIComponent(filename)}`);
@@ -78,14 +76,12 @@ export async function createPreviewEditor(options = {}) {
     let dirty = false;
     const showManagerButton = mode === EDITOR_MODE.PREVIEW_CLICK;
     const allowModelSelect = mode === EDITOR_MODE.MANAGER_ADD;
-    // 长按选择状态
     let selectMode = false;
     const selectedItems = new Set();
     const thumbElements = new Map();
     let removeButton = null;
     const content = document.createElement("div");
     content.className = "a1r-pm-editor-content";
-    // --- 模型区域 ---
     const modelSection = document.createElement("div");
     modelSection.className = "a1r-editor-section";
     const modelRow = document.createElement("div");
@@ -149,7 +145,6 @@ export async function createPreviewEditor(options = {}) {
     modelRow.appendChild(modelWrapper);
     modelSection.appendChild(modelRow);
     content.appendChild(modelSection);
-    // --- 上传区域 ---
     const uploadSection = document.createElement("div");
     uploadSection.className = "a1r-pm-upload-section";
     const dropZone = document.createElement("div");
@@ -188,16 +183,13 @@ export async function createPreviewEditor(options = {}) {
     });
     uploadSection.appendChild(dropZone);
     uploadSection.appendChild(fileInput);
-    // --- 缩略图区域 ---
     const thumbSection = document.createElement("div");
     thumbSection.className = "a1r-pm-thumb-section";
     const thumbGrid = document.createElement("div");
     thumbGrid.className = "a1r-pm-thumb-grid";
     thumbSection.appendChild(thumbGrid);
-    // 缩略图在上，上传区在下
     content.appendChild(thumbSection);
     content.appendChild(uploadSection);
-    // --- 辅助函数 ---
     function exitSelectMode() {
         if (!selectMode)
             return;
@@ -246,7 +238,6 @@ export async function createPreviewEditor(options = {}) {
             wrapper.appendChild(img);
             wrapper.appendChild(indexBadge);
             thumbElements.set(i, wrapper);
-            // 长按选择
             let longPressTimer = null;
             let isLongPress = false;
             const LONG_PRESS_MS = 500;
@@ -347,7 +338,6 @@ export async function createPreviewEditor(options = {}) {
             showToast("Failed to delete images", "error");
         }
     }
-    // --- 构建对话框 ---
     const title = allowModelSelect ? "Add Model Previews" : "Edit Model Previews";
     const builder = new DialogBuilder(DIALOG_TYPE.CUSTOM)
         .setTitle(title)

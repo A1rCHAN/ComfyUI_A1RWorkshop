@@ -1,4 +1,3 @@
-// @ts-expect-error ComfyUI frontend module
 import { app } from "/scripts/app.js";
 import { initGlobalThemeCSSVar, injectCSS } from "../theme/themeWatcher.js";
 import { createCollectorButton, stopCollectorForRemovedNode } from "../helper/collector.js";

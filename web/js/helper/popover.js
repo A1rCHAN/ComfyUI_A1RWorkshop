@@ -1,14 +1,8 @@
-// @ts-expect-error ComfyUI 运行时注入模块
 import { app } from "/scripts/app.js";
-// @ts-expect-error ComfyUI 运行时注入模块
 import { api } from "/scripts/api.js";
 import { hexToRGBA } from "../theme/themeUtils.js";
 import { resolveThemeToken } from "../theme/themeWatcher.js";
-// ========== 缓存 API ==========
 const CACHE_API = "/api/a1rworkshop";
-/**
- * 将图像复制到 .cache/，文件名为 {seed}_{index}.ext，返回可持久化的缓存 URL 列表
- */
 async function cacheImages(seed, images) {
     const resp = await api.fetchApi(`${CACHE_API}/cache_images`, {
         method: "POST",
@@ -20,15 +14,9 @@ async function cacheImages(seed, images) {
     const data = await resp.json();
     return data.cached.map((name) => api.apiURL(`${CACHE_API}/cache/${name}`));
 }
-/**
- * 清空 .cache/ 目录
- */
 export async function clearImageCache() {
     await api.fetchApi(`${CACHE_API}/clear_cache`, { method: "POST" });
 }
-/**
- * 删除指定种子的缓存图片
- */
 export async function deleteCachedImages(seed) {
     await api.fetchApi(`${CACHE_API}/delete_seed_cache`, {
         method: "POST",
@@ -36,17 +24,10 @@ export async function deleteCachedImages(seed) {
         body: JSON.stringify({ seed }),
     });
 }
-// ========== 图像快照 ==========
-/**
- * 从工作流中收集当前执行产生的图像引用。
- * 优先级：所有输入包含 images 且有图像输出的节点 → 保底 SaveImage/PreviewImage。
- * 跳过 bypass (mode=4) 和 mute (mode=2) 的节点。
- */
 function collectImageRefs() {
     const imageNodes = [];
     const fallbackNodes = [];
     for (const node of app.graph._nodes) {
-        // 跳过 bypass (4) 和 mute (2) 的节点
         if (node.mode === 2 || node.mode === 4)
             continue;
         const nodeId = String(node.id);
@@ -76,11 +57,7 @@ function collectImageRefs() {
     }
     return refs;
 }
-/**
- * 为指定种子快照当前图像输出（异步缓存到本地 .cache/）
- */
 export async function snapshotImagesForSeed(node, seed) {
-    // 跳过 bypass (4) 和 mute (2) 的节点
     if (node.mode === 2 || node.mode === 4)
         return;
     const refs = collectImageRefs();
@@ -91,7 +68,6 @@ export async function snapshotImagesForSeed(node, seed) {
         node.seedImageMap.set(seed, urls);
     }
 }
-// ========== 大图查看器（Lightbox） ==========
 let lightbox = null;
 let lbIndex = 0;
 let lbUrls = [];
@@ -122,7 +98,6 @@ function showLightboxAt(index) {
     if (counter) {
         counter.textContent = lbUrls.length > 1 ? `${lbIndex + 1} / ${lbUrls.length}` : "";
     }
-    // 多图时才显示箭头
     const arrows = lightbox.querySelectorAll(".a1r-lightbox-arrow");
     arrows.forEach(a => a.style.display = lbUrls.length > 1 ? "" : "none");
 }
@@ -135,33 +110,27 @@ export function openLightbox(urls, startIndex = 0, onClose) {
     const token = resolveThemeToken();
     lightbox = document.createElement("div");
     lightbox.className = "a1r-lightbox-overlay";
-    // 点击背景关闭
     lightbox.addEventListener("click", (e) => {
         if (e.target === lightbox)
             closeLightbox();
     });
-    // 左箭头
     const arrowLeft = document.createElement("div");
     arrowLeft.className = "a1r-lightbox-arrow a1r-lightbox-arrow--left";
     arrowLeft.textContent = "\u276E";
     arrowLeft.addEventListener("click", (e) => { e.stopPropagation(); showLightboxAt(lbIndex - 1); });
     lightbox.appendChild(arrowLeft);
-    // 图片
     const img = document.createElement("img");
     img.className = "a1r-lightbox-img";
     img.addEventListener("click", (e) => e.stopPropagation());
     lightbox.appendChild(img);
-    // 右箭头
     const arrowRight = document.createElement("div");
     arrowRight.className = "a1r-lightbox-arrow a1r-lightbox-arrow--right";
     arrowRight.textContent = "\u276F";
     arrowRight.addEventListener("click", (e) => { e.stopPropagation(); showLightboxAt(lbIndex + 1); });
     lightbox.appendChild(arrowRight);
-    // 计数器
     const counter = document.createElement("div");
     counter.className = "a1r-lightbox-counter";
     lightbox.appendChild(counter);
-    // 关闭按钮
     const closeBtn = document.createElement("div");
     closeBtn.className = "a1r-lightbox-close";
     closeBtn.textContent = "\u2715";
@@ -170,7 +139,6 @@ export function openLightbox(urls, startIndex = 0, onClose) {
     lightbox.style.boxShadow = `0 0 80px ${hexToRGBA(token.color.shadow, 0.6)}`;
     document.body.appendChild(lightbox);
     showLightboxAt(startIndex);
-    // 滚轮导航
     lightbox.addEventListener("wheel", (e) => {
         e.preventDefault();
         if (e.deltaY > 0)
@@ -178,7 +146,6 @@ export function openLightbox(urls, startIndex = 0, onClose) {
         else if (e.deltaY < 0)
             showLightboxAt(lbIndex - 1);
     }, { passive: false });
-    // 键盘导航
     const onKey = (e) => {
         if (!lightbox) {
             document.removeEventListener("keydown", onKey);
@@ -193,8 +160,6 @@ export function openLightbox(urls, startIndex = 0, onClose) {
     };
     document.addEventListener("keydown", onKey);
 }
-// ========== 通用定位 ==========
-/** 将 tooltip 定位到 referenceEl 右侧、anchorEl 垂直位置（向上偏移 25%） */
 function positionTooltip(el, anchorEl, referenceEl) {
     const refRect = referenceEl.getBoundingClientRect();
     const tipRect = el.getBoundingClientRect();
@@ -213,11 +178,10 @@ function positionTooltip(el, anchorEl, referenceEl) {
     el.style.left = `${left}px`;
     el.style.top = `${top}px`;
 }
-// ========== 预览悬浮提示 ==========
 export function createPreviewTooltip() {
     let tooltip = null;
     let removeTimer = null;
-    let pinned = false; // lightbox 打开后钉住预览，直到切换种子或关闭列表
+    let pinned = false;
     function cancelRemoveTimer() {
         if (removeTimer !== null) {
             clearTimeout(removeTimer);
@@ -232,7 +196,6 @@ export function createPreviewTooltip() {
             tooltip = null;
         }
     }
-    /** 延迟移除：给用户时间将鼠标移到预览上（pinned 时忽略） */
     function scheduleRemove() {
         if (pinned)
             return;
@@ -248,9 +211,7 @@ export function createPreviewTooltip() {
             return;
         tooltip = document.createElement("div");
         tooltip.className = "a1r-seed-preview";
-        // 鼠标进入预览区域时取消延迟移除
         tooltip.addEventListener("mouseenter", cancelRemoveTimer);
-        // 鼠标离开预览区域时延迟移除（pinned 时 scheduleRemove 内部会忽略）
         tooltip.addEventListener("mouseleave", scheduleRemove);
         const token = resolveThemeToken();
         tooltip.style.boxShadow = `0 6px 20px ${hexToRGBA(token.color.shadow, 0.5)}`;
@@ -279,10 +240,8 @@ export function createPreviewTooltip() {
         scheduleRemove,
     };
 }
-// ========== 模型预览悬浮（循环播放） ==========
 const MODEL_PREVIEW_API = "/api/a1rworkshop";
 export const MODEL_PREVIEW_UPDATED_EVENT = "a1r:model-preview-updated";
-/** 缓存: folder+filename → url[] (空数组表示已查过无结果) */
 const previewCache = new Map();
 function modelPreviewCacheKey(folder, filename) {
     return `${folder}::${filename}`;
@@ -337,8 +296,8 @@ export function createModelPreviewTooltip() {
     let removeTimer = null;
     let currentIndex = 0;
     let currentUrls = [];
-    let showingA = true; // imgA 在前台
-    let editing = false; // 编辑中时锁住 tooltip
+    let showingA = true;
+    let editing = false;
     let outsideHandler = null;
     function stopCycle() {
         if (cycleTimer !== null) {
@@ -375,10 +334,9 @@ export function createModelPreviewTooltip() {
     }
     function forceRemove() {
         if (editing)
-            return; // 编辑中不允许外部强制移除
+            return;
         teardown();
     }
-    /** 无条件销毁（show 内部用、outside-click 用） */
     function teardown() {
         editing = false;
         removeOutsideClickHandler();
@@ -417,7 +375,6 @@ export function createModelPreviewTooltip() {
             return;
         currentIndex = index % currentUrls.length;
         const nextUrl = currentUrls[currentIndex];
-        // 后台图加载下一张
         const backImg = showingA ? imgB : imgA;
         const frontImg = showingA ? imgA : imgB;
         backImg.src = nextUrl;
@@ -427,7 +384,7 @@ export function createModelPreviewTooltip() {
     }
     function show(urls, anchorEl, referenceEl, tags, onSaveTags, intervalMs = 2000, onImageClick) {
         if (editing)
-            return; // 编辑中不切换
+            return;
         teardown();
         const hasTags = tags && (tags.positive || tags.negative);
         if (!urls.length && !hasTags)
@@ -436,14 +393,11 @@ export function createModelPreviewTooltip() {
         const token = resolveThemeToken();
         tooltip = document.createElement("div");
         tooltip.className = "a1r-model-preview";
-        // 滞留显示：鼠标进入 tooltip 时取消移除，离开时延迟移除
         tooltip.addEventListener("mouseenter", cancelRemoveTimer);
         tooltip.addEventListener("mouseleave", scheduleRemove);
-        // 阻止所有指针事件冒泡，防止 PrimeVue outside-click 关闭下拉菜单
         for (const evt of ["mousedown", "mouseup", "click", "pointerdown", "pointerup"]) {
             tooltip.addEventListener(evt, (ev) => ev.stopPropagation());
         }
-        // 图片容器（双缓冲交叉淡入淡出）
         if (urls.length > 0) {
             const imgBox = document.createElement("div");
             imgBox.className = "a1r-model-preview-imgbox";
@@ -461,7 +415,6 @@ export function createModelPreviewTooltip() {
             container.appendChild(imgB);
             imgBox.appendChild(container);
             tooltip.appendChild(imgBox);
-            // 点击打开预览编辑器（如有回调）或大图
             container.style.cursor = "pointer";
             container.addEventListener("click", (e) => {
                 e.stopPropagation();
@@ -478,13 +431,10 @@ export function createModelPreviewTooltip() {
                 }
             });
         }
-        // 标签区域（纵向排列，整体在图片右侧）
-        // activeCloseEditor: 指向当前打开的编辑器的关闭函数
         let activeCloseEditor = null;
         if (hasTags) {
             const tagsWrapper = document.createElement("div");
             tagsWrapper.className = "a1r-model-preview-tags-wrapper";
-            // 保存当前 positive/negative 值（编辑时更新）
             const editState = { positive: tags.positive || "", negative: tags.negative || "" };
             function makeTagSection(type, text) {
                 const section = document.createElement("div");
@@ -496,9 +446,7 @@ export function createModelPreviewTooltip() {
                 content.className = "a1r-model-preview-tags-content";
                 content.textContent = text;
                 content.style.cursor = "pointer";
-                // 点击 tag-box 区域（含 label）退出编辑
                 section.addEventListener("click", (e) => {
-                    // 来自 content / editor 内部的事件不在此处理
                     if (e.target?.closest?.(".a1r-model-preview-tags-content, .a1r-model-preview-tags-editor"))
                         return;
                     e.stopPropagation();
@@ -507,10 +455,8 @@ export function createModelPreviewTooltip() {
                 });
                 content.addEventListener("click", (e) => {
                     e.stopPropagation();
-                    // 已在编辑状态则跳过（本 section 自己的编辑器）
                     if (section.querySelector(".a1r-model-preview-tags-editor"))
                         return;
-                    // 关闭其他 section 的编辑器
                     if (activeCloseEditor)
                         activeCloseEditor(false);
                     cancelRemoveTimer();
@@ -568,7 +514,6 @@ export function createModelPreviewTooltip() {
                     btnRow.appendChild(cancelBtn);
                     editor.appendChild(textarea);
                     editor.appendChild(btnRow);
-                    // 替换显示文本，编辑器插入到 content 后面
                     content.style.display = "none";
                     section.appendChild(editor);
                     textarea.focus();
@@ -585,7 +530,6 @@ export function createModelPreviewTooltip() {
         }
         document.body.appendChild(tooltip);
         positionTooltip(tooltip, anchorEl, referenceEl);
-        // 多图时启动循环
         if (urls.length > 1) {
             currentIndex = 0;
             cycleTimer = setInterval(() => {

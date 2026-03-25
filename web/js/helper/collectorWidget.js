@@ -1,4 +1,3 @@
-// @ts-expect-error ComfyUI frontend module
 import { app } from "/scripts/app.js";
 import { createContainer, createOverlay } from "../theme/themeUtils.js";
 import { toggleCollectorState, setCollectorButtonState, getCollectorSessionState, syncCollectorActiveClass, subscribeWidgetCollectorPickRequest, watchNodeTitleChanges, getNodeTitleSnapshot, getWidgetNameOrLabel, extractCollectorRowDisplayName, ensureCollectButtonAtBottom, } from "./collector.js";
@@ -26,7 +25,6 @@ let mirrorDragSourceNodeId = null;
 let mirrorDropTargetWidgetKey = null;
 let mirrorDropTargetPosition = null;
 let disposeExternalWidgetPickRequest = null;
-// === 记录存储与序列化 === //
 function getMirrorBindings(node) {
     if (!(node.__a1rMirrorBindings instanceof Map)) {
         node.__a1rMirrorBindings = new Map();
@@ -132,7 +130,6 @@ function getVisibleMirrorWidgets(node) {
         return [];
     return node.widgets.filter((widget) => isMirrorWidget(widget));
 }
-// === 镜像 widget 覆盖拖放状态 === //
 function clearMirrorDropIndicators() {
     for (const overlay of mirrorOverlayByWidgetKey.values()) {
         overlay.classList.remove("collector-mirror-drop-before", "collector-mirror-drop-after");
@@ -248,7 +245,6 @@ function beginMirrorDrag(sourceNode, sourceNodeId, widgetKey, pointerId) {
     window.addEventListener("pointerup", onMirrorDragPointerUp, true);
     window.addEventListener("pointercancel", onMirrorDragPointerCancel, true);
 }
-// === 镜像 widget 生命周期与排序 === //
 function scheduleOverlayRefresh(sourceNode) {
     if (isMountingOverlays)
         return;
@@ -409,19 +405,15 @@ function notifyMirrorWidgetMetaChanged(node) {
     if (!Array.isArray(node?.widgets))
         return;
     try {
-        // Vue Nodes wraps node.widgets with a reactive setter; re-assign to trigger label re-render.
         node.widgets = [...node.widgets];
     }
     catch {
-        // Fallback for runtimes without writable widgets descriptor.
     }
     try {
-        // Legacy fallback used by old implementation, keeps non-Vue and mixed runtimes in sync.
         node.widgets.splice(0, 0);
         node.widgets.splice(0, 0);
     }
     catch {
-        // Ignore if widgets array is not patchable.
     }
     if (typeof node?.onResize === "function") {
         node.onResize();
@@ -726,7 +718,6 @@ function collectSelectedWidgetsToNode(sourceNode) {
         app.graph.setDirtyCanvas(true, true);
     }
 }
-// === 覆盖层工具函数 === //
 function stopCollectorEvent(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -901,7 +892,6 @@ function clearAllOverlays() {
     }
     mountedOverlayHosts.clear();
 }
-// === 目标 widget 元数据解析 === //
 function getWidgetNameFromGraph(targetNodeId, widgetIndex) {
     const graph = app.graph;
     const targetNode = graph?.getNodeById?.(targetNodeId);
@@ -1036,7 +1026,6 @@ function hasRelevantMutations(mutations) {
     }
     return false;
 }
-// === 覆盖层挂载 === //
 function mountSourceMirrorOverlay(row, sourceNode, sourceNodeId, usedMirrorWidgetKeys) {
     const mirrorWidget = resolveSourceMirrorWidgetForRow(sourceNode, row, usedMirrorWidgetKeys);
     const widgetKey = String(mirrorWidget?.__a1rWidgetKey || "").trim();
@@ -1215,7 +1204,6 @@ function mountWidgetOverlays(sourceNode) {
         isMountingOverlays = false;
     }
 }
-// === 收集模式生命周期 === //
 function activateCollect(node) {
     console.log("[a1rworkshop.widgetcollector] Collecting widgets...");
     collectingNodeId = Number(node.id);

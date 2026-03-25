@@ -1,4 +1,3 @@
-// @ts-expect-error ComfyUI 运行时注入模块
 import { app } from "/scripts/app.js";
 import { getModelFromNode, getTagsDB, initConfig, isModelLoaderNode } from "../data/config_model.js";
 import { setupTagInjector } from "./tag_injector.js";

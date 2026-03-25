@@ -1,4 +1,3 @@
-// === canvas setting state ===
 function createCanvasSettingState(input) {
     const { currentMin, currentMax, currentStep } = input;
     return {

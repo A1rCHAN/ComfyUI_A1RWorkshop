@@ -1,5 +1,4 @@
 import { getCanvasSettingState } from "../data/state.js";
-// === 工具 ===
 export function hexToRGBA(hex, alpha = 1) {
     if (!hex)
         return `rgba(0, 0, 0, ${alpha})`;
@@ -43,7 +42,6 @@ export function showToast(message, type = "success", duration = 2500, customStyl
     }
     return el;
 }
-// === 组件 ===
 export function createOverlay(customStyle = {}) {
     const el = document.createElement('div');
     el.className = 'a1r-overlay';
@@ -63,7 +61,6 @@ export function createContainer(customStyle = {}) {
     return el;
 }
 export function createButton(label, customStyleOrOptions = {}) {
-    // 兼容旧调用方式（第二参数直接传 style 对象）
     const isOptions = 'customStyle' in customStyleOrOptions || 'ellipsis' in customStyleOrOptions;
     const options = isOptions
         ? customStyleOrOptions
@@ -102,14 +99,12 @@ export function createTextarea(customStyle = {}) {
     Object.assign(el.style, customStyle);
     return el;
 }
-// === 复合组件 ===
 export function rangeSlider(customStyle = {}) {
     return createRangeSlider(customStyle);
 }
 export function stepSlider(customStyle = {}) {
     return createStepSlider(customStyle);
 }
-// --- 辅助函数 ---
 function hiddenSlider(config = {}, customStyle = {}) {
     const hiddenSlider = document.createElement("input");
     hiddenSlider.className = 'a1r-slider-hidden';
@@ -127,7 +122,6 @@ function hiddenSlider(config = {}, customStyle = {}) {
 }
 function createRangeSlider(customStyle = {}) {
     const state = getCanvasSettingState();
-    // 整体（容器）
     const main = createContainer(customStyle);
     const track = document.createElement("div");
     track.className = 'a1r-slider-track';
@@ -153,10 +147,6 @@ function createRangeSlider(customStyle = {}) {
     const maxThumb = document.createElement("div");
     maxThumb.className = 'a1r-slider-thumb';
     Object.assign(maxThumb.style, customStyle);
-    // const updateVisual = () => {
-    //   minSlider.value = state.rangeMinValue
-    //   maxSlider.value = state.rangeMaxValue
-    // }
     main.appendChild(track);
     main.appendChild(activeTrack);
     main.appendChild(minThumb);

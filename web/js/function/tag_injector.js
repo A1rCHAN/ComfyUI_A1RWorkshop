@@ -1,17 +1,11 @@
-// @ts-expect-error ComfyUI 运行时注入模块
 import { app } from "/scripts/app.js";
 import { ModelMetadata, getModelFromNode, getTagsDB, isModelLoaderNode } from "../data/config_model.js";
-// 常量
 const TAG_SEPARATOR = ", ";
 const PENDING_TAGS_KEY = "_pendingEmbeddingTags";
-/**
- * 设置标签注入器钩子到 ComfyUI 的主函数
- */
 export function setupTagInjector() {
     const extendedApp = app;
     const originalQueuePrompt = extendedApp.queuePrompt;
     const originalGraphToPrompt = extendedApp.graphToPrompt;
-    // 挂钩到 queuePrompt 以在处理前收集标签
     extendedApp.queuePrompt = async function (number, batchCount) {
         const db = getTagsDB();
         if (db) {
@@ -23,10 +17,7 @@ export function setupTagInjector() {
         }
         return originalQueuePrompt.call(this, number, batchCount);
     };
-    // 挂钩到 graphToPrompt 以将标签注入到最终的提示词输出中
     extendedApp.graphToPrompt = async function () {
-        // 还原逻辑：完全移除之前的 app.graph.serialize() 和 links_dirty 操作。
-        // 这不会影响 LiteGraph 的内部状态，是最安全的方式。
         const result = await originalGraphToPrompt.call(this);
         const pending = extendedApp[PENDING_TAGS_KEY];
         if (pending?.length && result) {
@@ -36,9 +27,6 @@ export function setupTagInjector() {
         return result;
     };
 }
-/**
- * 扫描当前图中的模型加载节点并收集关联的标签。
- */
 function collectEmbeddingTags() {
     const tags = [];
     const db = getTagsDB();
@@ -69,9 +57,6 @@ function collectEmbeddingTags() {
     }
     return tags;
 }
-/**
- * 将收集到的标签注入到提示词数据中已连接的 CLIPTextEncode 节点。
- */
 function injectTagsIntoPrompt(promptData, embeddingTags) {
     if (!promptData?.output)
         return;
@@ -137,9 +122,6 @@ function traceUpstreamRole(promptData, startNodeId, role, roles, visited = new S
         }
     }
 }
-/**
- * 遍历图输出（工作流结构）以查找连接到源节点的 CLIPTextEncode 节点。
- */
 function findConnectedTextEncodeNodes(promptData, modelNodeId) {
     const connectedNodes = [];
     const visited = new Set();
@@ -153,22 +135,18 @@ function findConnectedTextEncodeNodes(promptData, modelNodeId) {
         const node = outputNodes[currentId];
         if (!node)
             continue;
-        // 如果找到 CLIPTextEncode 节点，加入结果并停止遍历此分支
-        // (通常我们不想遍历 *穿过* 文本编码器)
         if (node.class_type === "CLIPTextEncode") {
             connectedNodes.push(currentId);
             continue;
         }
-        // 查找将 'currentId' 作为输入的节点
         for (const [otherId, otherNode] of Object.entries(outputNodes)) {
             if (visited.has(otherId))
                 continue;
             const inputs = otherNode.inputs || {};
             for (const inputValue of Object.values(inputs)) {
-                // ComfyUI 提示词结构链接是数组: ["sourceNodeId", outputIndex]
                 if (Array.isArray(inputValue) && String(inputValue[0]) === currentId) {
                     queue.push(otherId);
-                    break; // 找到到此节点的链接，加入队列
+                    break;
                 }
             }
         }

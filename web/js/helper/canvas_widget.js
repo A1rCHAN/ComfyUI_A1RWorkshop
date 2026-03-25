@@ -1,4 +1,3 @@
-// @ts-expect-error ComfyUI 运行时注入模块
 import { app } from "/scripts/app.js";
 import { resolveThemeToken, watchThemeToken } from "../theme/themeWatcher.js";
 export const SIZE_PRESETS = {
@@ -71,9 +70,7 @@ export function restoreWidgetRange(node) {
         }
     }
 }
-// ========== 2D Canvas Widget ==========
 export function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeight) {
-    // DOM 结构
     const container = document.createElement("div");
     container.className = "a1r-canvas-container";
     const sliderBox = document.createElement("div");
@@ -106,7 +103,6 @@ export function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeig
     const coordTooltip = document.createElement("div");
     coordTooltip.className = "a1r-canvas-coord-tooltip";
     document.body.appendChild(coordTooltip);
-    // 拖拽状态
     let isDragging = false;
     let isProgrammaticUpdate = false;
     let dragMode = null;
@@ -157,11 +153,6 @@ export function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeig
         lineV.style.left = `${xPercent}%`;
         const gridSizeXPercent = (gridStepW / maxW) * 100;
         const gridSizeYPercent = (gridStepH / maxH) * 100;
-        // const gridColor = color.secondary
-        // grid.style.backgroundImage = `
-        //   linear-gradient(to right, ${gridColor} 1px, transparent 1px),
-        //   linear-gradient(to bottom, ${gridColor} 1px, transparent 1px)
-        // `
         grid.style.backgroundSize = `${Math.max(gridSizeXPercent, 5)}% ${Math.max(gridSizeYPercent, 5)}%`;
         grid.style.backgroundPosition = "0% 100%";
     }
@@ -280,7 +271,6 @@ export function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeig
         isProgrammaticUpdate = false;
         updateDisplay();
     }
-    // 主题监听
     const unwatchTheme = watchThemeToken((token) => {
         color = token.color;
         updateDisplay();
@@ -294,7 +284,6 @@ export function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeig
             lineVVisual.style.outlineColor = color.text;
         }
     });
-    // 交互事件
     point.addEventListener("mouseenter", () => {
         if (!isDragging)
             point.style.outline = `2px solid ${color.text}`;
@@ -419,7 +408,6 @@ export function create2DSliderWidget(node, widgetPreset, widgetWidth, widgetHeig
     };
     document.addEventListener("mousemove", handleMouseMove, true);
     document.addEventListener("mouseup", handleMouseUp, true);
-    // 创建 widget
     const widget = node.addDOMWidget("canvas_2d_slider", "CANVAS_2D_SLIDER", container, {
         serialize: false,
         hideOnZoom: false,

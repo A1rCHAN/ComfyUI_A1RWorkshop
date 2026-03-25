@@ -28,7 +28,6 @@ function normalizeRadius(borderRadius) {
     };
 }
 function readThemeNameFromDOM() {
-    // 1. ComfyUI Settings API（主要来源）
     try {
         const colorPalette = window.app?.ui?.settings?.getSettingValue?.("Comfy.ColorPalette");
         if (typeof colorPalette === "string") {
@@ -37,14 +36,12 @@ function readThemeNameFromDOM() {
                 return normalized;
         }
     }
-    catch { /* 忽略异常 */ }
-    // 2. data-theme 属性回退
+    catch { }
     const raw = document.documentElement.getAttribute("data-theme") ||
         document.body.getAttribute("data-theme") ||
         "";
     if (isThemeName(raw))
         return raw;
-    // 3. body class 回退（theme-xxx 格式）
     for (const cls of document.body.classList) {
         const name = cls.replace(/^theme-/, "").toLowerCase();
         if (isThemeName(name))
@@ -52,10 +49,6 @@ function readThemeNameFromDOM() {
     }
     return "dark";
 }
-/**
- * 补丁 ComfyUI Settings API，使设置变更同时在 window 上触发事件。
- * 旧 adapter 通过此机制监听 Comfy.ColorPalette / Comfy.VueNodes.Enabled 变更。
- */
 function patchSettingsDispatcher() {
     const s = window.app?.ui?.settings;
     if (s && !s.__a1r_patched && typeof s.dispatchChange === "function") {
@@ -92,13 +85,6 @@ export function resolveThemeToken(theme = {}) {
     };
 }
 export function watchThemeToken(cb, theme = {}) {
-    /**
-     * 监听来源：
-     * - theme style 事件（手动切换 classic/modern）
-     * - storage 变更（跨 tab 同步）
-     * - DOM 属性变化（data-theme/class/style）
-     * - 轻量轮询兜底（避免漏掉第三方更新）
-     */
     let last = "";
     const emit = () => {
         const token = resolveThemeToken(theme);
@@ -114,7 +100,6 @@ export function watchThemeToken(cb, theme = {}) {
         }
     };
     emit();
-    // 补丁 ComfyUI Settings API，使 Comfy.ColorPalette 等变更能即时触发
     patchSettingsDispatcher();
     const settingsInterval = window.setInterval(() => {
         const s = window.app?.ui?.settings;
@@ -131,9 +116,7 @@ export function watchThemeToken(cb, theme = {}) {
     const onSettingChange = () => emit();
     window.addEventListener(THEME_STYLE_CHANGE_EVENT, onStyle);
     window.addEventListener("storage", onStorage);
-    // 监听 ComfyUI 主题配色切换
     window.addEventListener("Comfy.ColorPalette.change", onSettingChange);
-    // 监听前端模式切换（Nodes 2.0 ↔ Classic）
     window.addEventListener("Comfy.VueNodes.Enabled.change", onSettingChange);
     window.addEventListener("Comfy.UseNewMenu.change", onSettingChange);
     const mo = new MutationObserver(() => emit());
